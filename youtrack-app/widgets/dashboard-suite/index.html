@@ -371,25 +371,44 @@
     </div>
 
     <script>
-        // Detectar URL base automaticamente
+        // Detectar URL base do YouTrack de forma mais robusta
         function getYouTrackBaseUrl() {
-            // Se estivermos em um widget, extrair a URL base
-            const currentUrl = window.location.href;
-
-            if (currentUrl.includes('/api/appResources/')) {
-                // Extrair base URL de URLs como: https://domain.youtrack.cloud/api/appResources/...
-                const match = currentUrl.match(/(https?:\/\/[^\/]+)/);
-                return match ? match[1] + '/api' : '/api';
+            // Primeiro, tentar obter do window parent (se em iframe)
+            try {
+                if (window.parent && window.parent !== window) {
+                    const parentUrl = window.parent.location.href;
+                    const match = parentUrl.match(/(https?:\/\/[^\/]+)/);
+                    if (match) {
+                        console.log('🔗 URL do parent:', parentUrl);
+                        return match[1] + '/api';
+                    }
+                }
+            } catch (e) {
+                console.log('⚠️ Não foi possível acessar parent window:', e.message);
             }
 
-            // Fallback para URL relativa
-            return '/api';
+            // Extrair da URL atual do widget
+            const currentUrl = window.location.href;
+            console.log('🌐 URL atual do widget:', currentUrl);
+
+            // Para widgets do YouTrack, a URL é algo como:
+            // https://domain.youtrack.cloud/api/appResources/ID/widgets/path/...
+            if (currentUrl.includes('.youtrack.cloud')) {
+                const match = currentUrl.match(/(https?:\/\/[^\/]+\.youtrack\.cloud)/);
+                if (match) {
+                    console.log('✅ Domínio YouTrack detectado:', match[1]);
+                    return match[1] + '/api';
+                }
+            }
+
+            // Se não conseguir detectar automaticamente, usar hardcoded
+            console.log('⚠️ Usando URL hardcoded');
+            return 'https://braiphub.youtrack.cloud/api';
         }
 
         const YT_API_BASE = getYouTrackBaseUrl();
 
-        console.log('🌐 URL atual:', window.location.href);
-        console.log('🔗 API Base URL:', YT_API_BASE);
+        console.log('🔗 API Base URL final:', YT_API_BASE);
 
         let dashboardData = {
             issues: [],
@@ -412,10 +431,14 @@
 
         // Função para buscar dados da API
         async function fetchWithAuth(url) {
-            console.log('Fazendo requisição para:', url);
+            // Garantir que a URL seja absoluta
+            const absoluteUrl = url.startsWith('http') ? url : YT_API_BASE + url;
+
+            console.log('🌐 URL original:', url);
+            console.log('🔗 URL absoluta:', absoluteUrl);
 
             try {
-                const response = await fetch(url, {
+                const response = await fetch(absoluteUrl, {
                     headers: {
                         'Accept': 'application/json',
                         'Content-Type': 'application/json'
@@ -423,19 +446,19 @@
                     credentials: 'same-origin'
                 });
 
-                console.log('Status da resposta:', response.status);
+                console.log('📡 Status da resposta:', response.status);
 
                 if (!response.ok) {
                     const errorText = await response.text();
-                    console.error('Erro na resposta:', errorText);
+                    console.error('❌ Erro na resposta:', errorText);
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
 
                 const data = await response.json();
-                console.log('Dados recebidos:', data);
+                console.log('✅ Dados recebidos:', data.length || Object.keys(data).length, 'itens');
                 return data;
             } catch (error) {
-                console.error('Erro na requisição:', error);
+                console.error('💥 Erro na requisição:', error);
                 throw error;
             }
         }
@@ -478,7 +501,7 @@
                 try {
                     // Tentar buscar dados reais da API
                     issues = await fetchWithAuth(
-                        `${YT_API_BASE}/issues?fields=id,idReadable,created,resolved,state(name),priority(name),project(name,shortName),assignee(name,fullName)&query=created: ${startTimestamp} .. ${endTimestamp}&$top=1000`
+                        `/issues?fields=id,idReadable,created,resolved,state(name),priority(name),project(name,shortName),assignee(name,fullName)&query=created: ${startTimestamp} .. ${endTimestamp}&$top=1000`
                     );
 
                     showSuccess('Dados carregados com sucesso!');
