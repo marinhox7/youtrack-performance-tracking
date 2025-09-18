@@ -1,0 +1,50 @@
+{
+  "key": "youtrack-performance-dashboard",
+  "name": "Performance Dashboard",
+  "version": "1.0.0",
+  "description": "Dashboard gerencial para análise de KPIs e métricas de performance do YouTrack",
+  "vendor": {
+    "name": "Your Company",
+    "email": "dev@yourcompany.com",
+    "url": "https://yourcompany.com"
+  },
+  "minYouTrackVersion": "2023.1.0",
+  "maxYouTrackVersion": "2024.2.0",
+  "widgets": [
+    {
+      "key": "performance-kpis",
+      "name": "Performance KPIs",
+      "description": "Principais KPIs de performance do YouTrack",
+      "extensionPoint": "DASHBOARD_WIDGET",
+      "indexPath": "widgets/kpis/index.html"
+    },
+    {
+      "key": "issues-priority-chart",
+      "name": "Issues por Prioridade",
+      "description": "Gráfico de pizza mostrando distribuição de issues por prioridade",
+      "extensionPoint": "DASHBOARD_WIDGET",
+      "indexPath": "widgets/priority-chart/index.html"
+    },
+    {
+      "key": "issues-project-chart",
+      "name": "Issues por Projeto",
+      "description": "Gráfico de barras mostrando distribuição de issues por projeto",
+      "extensionPoint": "DASHBOARD_WIDGET",
+      "indexPath": "widgets/project-chart/index.html"
+    },
+    {
+      "key": "issues-timeline",
+      "name": "Timeline de Issues",
+      "description": "Gráfico de linha mostrando criação de issues ao longo do tempo",
+      "extensionPoint": "DASHBOARD_WIDGET",
+      "indexPath": "widgets/timeline/index.html"
+    },
+    {
+      "key": "team-performance",
+      "name": "Performance da Equipe",
+      "description": "Gráfico mostrando performance individual dos membros da equipe",
+      "extensionPoint": "DASHBOARD_WIDGET",
+      "indexPath": "widgets/team-performance/index.html"
+    }
+  ]
+}

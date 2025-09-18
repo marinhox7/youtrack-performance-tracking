@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Performance KPIs</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 16px;
+            background: #fff;
+        }
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+        .kpi-card {
+            background: #f8f9fa;
+            border: 1px solid #e1e4e8;
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+        }
+        .kpi-title {
+            font-size: 12px;
+            color: #586069;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        .kpi-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #24292e;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #586069;
+        }
+        .error {
+            background: #ffeaea;
+            border: 1px solid #f97583;
+            color: #d73a49;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading" class="loading">Carregando KPIs...</div>
+    <div id="error" class="error" style="display: none;"></div>
+    <div id="kpis" class="kpi-grid" style="display: none;"></div>
+
+    <script>
+        const YT_API_BASE = window.location.origin + '/api';
+
+        async function fetchWithAuth(url) {
+            const response = await fetch(url, {
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'same-origin'
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            return response.json();
+        }
+
+        async function loadKPIs() {
+            try {
+                // Calcular período dos últimos 30 dias
+                const endDate = new Date();
+                const startDate = new Date(endDate.getTime() - (30 * 24 * 60 * 60 * 1000));
+
+                const startTimestamp = Math.floor(startDate.getTime());
+                const endTimestamp = Math.floor(endDate.getTime());
+
+                // Buscar issues dos últimos 30 dias
+                const issues = await fetchWithAuth(
+                    `${YT_API_BASE}/issues?fields=id,idReadable,created,resolved,state(name),priority(name)&query=created: ${startTimestamp} .. ${endTimestamp}&$top=1000`
+                );
+
+                // Calcular KPIs
+                const totalIssues = issues.length;
+                const resolvedIssues = issues.filter(issue => issue.resolved).length;
+                const resolutionRate = totalIssues > 0 ? (resolvedIssues / totalIssues * 100).toFixed(1) : 0;
+
+                // Calcular tempo médio de resolução
+                const resolvedWithTime = issues.filter(issue => issue.resolved && issue.created);
+                let avgResolutionTime = 'N/A';
+
+                if (resolvedWithTime.length > 0) {
+                    const totalTime = resolvedWithTime.reduce((sum, issue) => {
+                        return sum + (issue.resolved - issue.created);
+                    }, 0);
+                    const avgMs = totalTime / resolvedWithTime.length;
+                    const avgDays = Math.round(avgMs / (1000 * 60 * 60 * 24));
+                    avgResolutionTime = `${avgDays} dias`;
+                }
+
+                // Renderizar KPIs
+                const kpisHtml = `
+                    <div class="kpi-card">
+                        <div class="kpi-title">Total de Issues</div>
+                        <div class="kpi-value">${totalIssues}</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-title">Issues Resolvidas</div>
+                        <div class="kpi-value">${resolvedIssues} (${resolutionRate}%)</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-title">Tempo Médio de Resolução</div>
+                        <div class="kpi-value">${avgResolutionTime}</div>
+                    </div>
+                `;
+
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('kpis').innerHTML = kpisHtml;
+                document.getElementById('kpis').style.display = 'grid';
+
+            } catch (error) {
+                console.error('Erro ao carregar KPIs:', error);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').textContent = 'Erro ao carregar dados: ' + error.message;
+                document.getElementById('error').style.display = 'block';
+            }
+        }
+
+        // Carregar dados quando o widget for inicializado
+        document.addEventListener('DOMContentLoaded', loadKPIs);
+
+        // Recarregar a cada 5 minutos
+        setInterval(loadKPIs, 5 * 60 * 1000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+{
+  "name": "youtrack-performance-dashboard",
+  "version": "1.0.0",
+  "description": "Dashboard gerencial para análise de KPIs e métricas de performance do YouTrack",
+  "main": "manifest.json",
+  "scripts": {
+    "build": "npm run zip",
+    "zip": "powershell \"Compress-Archive -Path manifest.json,widgets,README.md -DestinationPath youtrack-performance-dashboard.zip -Force\"",
+    "clean": "del *.zip",
+    "upload": "node upload.js"
+  },
+  "keywords": [
+    "youtrack",
+    "dashboard",
+    "kpi",
+    "metrics",
+    "performance"
+  ],
+  "author": "Your Company",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^17.2.2"
+  }
+}

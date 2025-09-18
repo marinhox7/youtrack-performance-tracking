@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Issues por Projeto</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 16px;
+            background: #fff;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #586069;
+        }
+        .error {
+            background: #ffeaea;
+            border: 1px solid #f97583;
+            color: #d73a49;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+        }
+        h3 {
+            margin: 0 0 16px 0;
+            color: #24292e;
+            font-size: 16px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <h3>Issues por Projeto</h3>
+    <div id="loading" class="loading">Carregando gráfico...</div>
+    <div id="error" class="error" style="display: none;"></div>
+    <div id="chart-container" class="chart-container" style="display: none;">
+        <canvas id="projectChart"></canvas>
+    </div>
+
+    <script>
+        const YT_API_BASE = window.location.origin + '/api';
+
+        async function fetchWithAuth(url) {
+            const response = await fetch(url, {
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'same-origin'
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            return response.json();
+        }
+
+        async function loadProjectChart() {
+            try {
+                // Calcular período dos últimos 30 dias
+                const endDate = new Date();
+                const startDate = new Date(endDate.getTime() - (30 * 24 * 60 * 60 * 1000));
+
+                const startTimestamp = Math.floor(startDate.getTime());
+                const endTimestamp = Math.floor(endDate.getTime());
+
+                // Buscar issues com projeto
+                const issues = await fetchWithAuth(
+                    `${YT_API_BASE}/issues?fields=project(name,shortName)&query=created: ${startTimestamp} .. ${endTimestamp}&$top=1000`
+                );
+
+                // Agrupar por projeto
+                const projectCount = {};
+                issues.forEach(issue => {
+                    const project = issue.project?.name || 'Sem Projeto';
+                    projectCount[project] = (projectCount[project] || 0) + 1;
+                });
+
+                // Preparar dados para o gráfico
+                const labels = Object.keys(projectCount);
+                const data = Object.values(projectCount);
+
+                // Criar gráfico
+                const ctx = document.getElementById('projectChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Número de Issues',
+                            data: data,
+                            backgroundColor: '#36A2EB',
+                            borderColor: '#2563eb',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return `Issues: ${context.parsed.y}`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    stepSize: 1
+                                }
+                            },
+                            x: {
+                                ticks: {
+                                    maxRotation: 45,
+                                    minRotation: 0
+                                }
+                            }
+                        }
+                    }
+                });
+
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('chart-container').style.display = 'block';
+
+            } catch (error) {
+                console.error('Erro ao carregar gráfico:', error);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').textContent = 'Erro ao carregar dados: ' + error.message;
+                document.getElementById('error').style.display = 'block';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadProjectChart);
+    </script>
+</body>
+</html>
