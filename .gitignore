@@ -5,6 +5,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # Environment variables
+.env
 .env.local
 .env.development.local
 .env.test.local
@@ -101,3 +102,6 @@ Thumbs.db
 
 # YouTrack plugin builds
 youtrack-app/*.zip
+
+# Claude Code settings (contain sensitive info)
+.claude/
