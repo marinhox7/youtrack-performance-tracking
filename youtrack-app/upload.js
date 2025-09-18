@@ -1,5 +1,5 @@
 const fs = require('fs');
-const path = require('path');
+const FormData = require('form-data');
 const https = require('https');
 
 // Carregar variáveis de ambiente do arquivo .env
@@ -26,38 +26,25 @@ async function uploadApp() {
         console.log('📦 Fazendo upload do plugin para YouTrack...');
         console.log(`🌐 URL: ${YOUTRACK_URL}`);
 
-        // Ler arquivo ZIP
+        // Ler arquivo ZIP como buffer
         const appData = fs.readFileSync(APP_ZIP_PATH);
 
-        // Preparar dados para multipart/form-data
-        const boundary = '----formdata-polyfill-' + Math.random();
-        const delimiter = `\r\n--${boundary}\r\n`;
-        const closeDelimiter = `\r\n--${boundary}--`;
-
-        let body = delimiter;
-        body += 'Content-Disposition: form-data; name="file"; filename="youtrack-performance-dashboard.zip"\r\n';
-        body += 'Content-Type: application/zip\r\n\r\n';
-
-        const bodyBuffer = Buffer.concat([
-            Buffer.from(body, 'utf8'),
-            appData,
-            Buffer.from(closeDelimiter, 'utf8')
-        ]);
-
-        // Configurar requisição
-        const url = new URL(`${YOUTRACK_URL}/api/admin/apps`);
+        // Usar endpoint web correto com método PUT
+        const url = new URL(`${YOUTRACK_URL}/admin/apps/upload`);
 
         const options = {
             hostname: url.hostname,
             port: url.port || 443,
             path: url.pathname,
-            method: 'POST',
+            method: 'PUT',
             headers: {
                 'Authorization': `Bearer ${YOUTRACK_TOKEN}`,
-                'Content-Type': `multipart/form-data; boundary=${boundary}`,
-                'Content-Length': bodyBuffer.length
+                'Content-Type': 'application/zip',
+                'Content-Length': appData.length
             }
         };
+
+        console.log('🔗 Enviando para:', `${url.protocol}//${url.hostname}${url.pathname}`);
 
         // Fazer upload
         const req = https.request(options, (res) => {
@@ -68,6 +55,8 @@ async function uploadApp() {
             });
 
             res.on('end', () => {
+                console.log(`📡 Status HTTP: ${res.statusCode}`);
+
                 if (res.statusCode >= 200 && res.statusCode < 300) {
                     console.log('✅ Plugin enviado com sucesso para o YouTrack!');
                     console.log('📋 Acesse o YouTrack Admin → Apps para gerenciar o plugin');
@@ -75,7 +64,7 @@ async function uploadApp() {
                     if (responseData) {
                         try {
                             const response = JSON.parse(responseData);
-                            console.log('📄 Resposta:', response);
+                            console.log('📄 Resposta:', JSON.stringify(response, null, 2));
                         } catch (e) {
                             console.log('📄 Resposta:', responseData);
                         }
@@ -83,6 +72,15 @@ async function uploadApp() {
                 } else {
                     console.error(`❌ Erro no upload: HTTP ${res.statusCode}`);
                     console.error('📄 Resposta:', responseData);
+
+                    // Tentar resposta como JSON
+                    try {
+                        const errorResponse = JSON.parse(responseData);
+                        console.error('📋 Detalhes do erro:', JSON.stringify(errorResponse, null, 2));
+                    } catch (e) {
+                        // Resposta não é JSON válido
+                    }
+
                     process.exit(1);
                 }
             });
@@ -93,8 +91,8 @@ async function uploadApp() {
             process.exit(1);
         });
 
-        // Enviar dados
-        req.write(bodyBuffer);
+        // Enviar dados do arquivo
+        req.write(appData);
         req.end();
 
     } catch (error) {
