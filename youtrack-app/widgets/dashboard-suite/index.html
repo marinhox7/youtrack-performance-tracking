@@ -373,6 +373,25 @@
         const ESTADOS_IGNORADOS = ['BACKLOG', 'MOVED TO NEXT SPRINT'];
         const ESTADOS_ATIVOS = ['IN DEVELOPMENT', 'CORRECTION', 'READY TO REVIEW', 'REVIEWING', 'APPROVED'];
 
+        // Projetos que possuem o campo Sprints
+        const PROJETOS_COM_SPRINTS = [
+            'Braip App Mobile',
+            'Braip Institucional',
+            'Braip Legado',
+            'Braip Logistica',
+            'Braip New Platform',
+            'Braip Pagamentos',
+            'Braip Subaquirente (HGPagamentos)',
+            'Team Compliance',
+            'Team Dados',
+            'Team DevOps',
+            'Team Produtos',
+            'Braip Tools - Canvas',
+            'Braip Tools - Members',
+            'Braip Tools - Pages',
+            'Braip Tools - Sales Recovery'
+        ];
+
         // Função utilitária para logs detalhados
         function logDetalhado(titulo, dados) {
             console.group(`📊 ${titulo}`);
@@ -393,52 +412,109 @@
             try {
                 console.log('🏃‍♂️ Carregando sprints disponíveis...');
 
-                // Método 1: Buscar diretamente o campo Sprints de qualquer projeto
+                // Método 1: Buscar campo Sprints nos projetos específicos que têm este campo
                 try {
                     const projects = await host.fetchYouTrack('admin/projects', {
                         fields: 'id,name,shortName',
-                        '$top': 10
+                        '$top': 50
                     });
 
-                    if (projects && projects.length > 0) {
-                        const firstProject = projects[0];
-                        console.log('🎯 Testando projeto:', firstProject.shortName);
+                    console.log(`🔍 Total de projetos encontrados: ${projects.length}`);
 
-                        // Buscar campo Sprints no projeto
-                        const customFields = await host.fetchYouTrack(`admin/projects/${firstProject.id}/customFields`, {
-                            fields: 'field(name,fieldType),bundle(id,values(id,name,archived))'
-                        });
+                    // Procurar projeto que tenha o campo Sprints
+                    for (const project of projects) {
+                        const projectName = project.name || project.shortName || project.id;
 
-                        const sprintsField = customFields.find(cf =>
-                            cf.field && cf.field.name === 'Sprints'
+                        // Verificar se é um dos projetos que tem Sprints
+                        const temSprints = PROJETOS_COM_SPRINTS.some(nomeProjeto =>
+                            projectName.includes(nomeProjeto) || nomeProjeto.includes(projectName)
                         );
 
-                        if (sprintsField && sprintsField.bundle && sprintsField.bundle.values) {
-                            console.log('✅ Campo Sprints encontrado no projeto:', firstProject.shortName);
+                        if (temSprints) {
+                            console.log('🎯 Verificando projeto com Sprints:', projectName);
 
-                            // Filtrar sprints não arquivadas
-                            const sprintsAtivos = sprintsField.bundle.values.filter(v => !v.archived);
-                            console.log(`📋 Sprints ativos encontrados: ${sprintsAtivos.length}`);
+                            try {
+                                // Buscar campo Sprints no projeto
+                                const customFields = await host.fetchYouTrack(`admin/projects/${project.id}/customFields`, {
+                                    fields: 'field(name,fieldType),bundle(id,values(id,name,archived))'
+                                });
 
-                            dashboardData.sprints = sprintsAtivos.map(sprint => ({
-                                id: sprint.id,
-                                name: sprint.name
-                            }));
+                                const sprintsField = customFields.find(cf =>
+                                    cf.field && cf.field.name === 'Sprints'
+                                );
 
-                            atualizarDropdownSprints();
-                            return; // Sucesso!
+                                if (sprintsField && sprintsField.bundle && sprintsField.bundle.values) {
+                                    console.log('✅ Campo Sprints encontrado no projeto:', projectName);
+
+                                    // Filtrar sprints não arquivadas
+                                    const sprintsAtivos = sprintsField.bundle.values.filter(v => !v.archived);
+                                    console.log(`📋 Sprints ativos encontrados: ${sprintsAtivos.length}`);
+
+                                    dashboardData.sprints = sprintsAtivos.map(sprint => ({
+                                        id: sprint.id,
+                                        name: sprint.name
+                                    }));
+
+                                    atualizarDropdownSprints();
+                                    return; // Sucesso!
+                                } else {
+                                    console.log(`⚠️ Projeto ${projectName} não tem campo Sprints configurado`);
+                                }
+                            } catch (fieldError) {
+                                console.log(`❌ Erro ao buscar campos do projeto ${projectName}:`, fieldError.message);
+                            }
                         }
                     }
+
+                    console.log('⚠️ Nenhum projeto com campo Sprints foi encontrado');
                 } catch (projectError) {
                     console.log('⚠️ Método de projeto falhou:', projectError.message);
                 }
 
                 // Método 2: Buscar bundles globalmente (fallback)
-                const bundles = await host.fetchYouTrack('admin/customFieldSettings/bundles', {
-                    fields: 'id,name,$type,values(id,name,archived)'
-                });
+                let bundles = [];
 
-                logDetalhado('Bundles encontrados', bundles);
+                // Tentar diferentes endpoints para encontrar bundles
+                const endpoints = [
+                    'admin/customFieldSettings/bundles',
+                    'admin/customFieldSettings/bundles/version',
+                    'admin/bundles',
+                    'bundles'
+                ];
+
+                for (const endpoint of endpoints) {
+                    try {
+                        console.log(`🔍 Tentando endpoint: ${endpoint}`);
+                        const bundlesResponse = await host.fetchYouTrack(endpoint, {
+                            fields: 'id,name,$type,values(id,name,archived)'
+                        });
+
+                        logDetalhado(`Response do endpoint ${endpoint}`, bundlesResponse);
+
+                        // Extrair array de bundles da resposta
+                        if (Array.isArray(bundlesResponse)) {
+                            bundles = bundlesResponse;
+                            console.log(`✅ Bundles encontrados no endpoint ${endpoint}:`, bundles.length);
+                            break;
+                        } else if (bundlesResponse && Array.isArray(bundlesResponse.bundles)) {
+                            bundles = bundlesResponse.bundles;
+                            console.log(`✅ Bundles encontrados no endpoint ${endpoint} (via .bundles):`, bundles.length);
+                            break;
+                        } else if (bundlesResponse && bundlesResponse.bundle) {
+                            bundles = Array.isArray(bundlesResponse.bundle) ? bundlesResponse.bundle : [bundlesResponse.bundle];
+                            console.log(`✅ Bundles encontrados no endpoint ${endpoint} (via .bundle):`, bundles.length);
+                            break;
+                        } else {
+                            console.log(`⚠️ Endpoint ${endpoint} retornou formato inesperado`);
+                        }
+                    } catch (error) {
+                        console.log(`❌ Endpoint ${endpoint} falhou:`, error.message);
+                    }
+                }
+
+                if (bundles.length === 0) {
+                    console.log('❌ Nenhum bundle encontrado em nenhum endpoint');
+                }
 
                 // Procurar bundle de versão/sprint usando múltiplos critérios
                 let sprintBundle = null;
@@ -667,7 +743,7 @@
                 }
 
                 const project = projects[0];
-                console.log('📋 Testando projeto:', project.shortName);
+                console.log('📋 Testando projeto:', project.shortName || project.name || project.id);
 
                 // Buscar campos customizados do projeto
                 const customFields = await host.fetchYouTrack(`admin/projects/${project.id}/customFields`, {
@@ -685,7 +761,9 @@
                     console.log('❌ Campo "Sprints" não encontrado');
                     console.log('💡 Campos disponíveis:');
                     customFields.forEach(cf => {
-                        console.log(`  - ${cf.field.name} (${cf.field.fieldType?.valueType || 'tipo desconhecido'})`);
+                        if (cf.field && cf.field.name) {
+                            console.log(`  - ${cf.field.name} (${cf.field.fieldType?.valueType || 'tipo desconhecido'})`);
+                        }
                     });
                     console.groupEnd();
                     return false;
@@ -834,17 +912,22 @@
                 const timestampInicio = dataInicio.getTime();
                 const timestampFim = Date.now();
 
-                // Construir query do YouTrack
+                // Construir query do YouTrack filtrada por projetos com Sprints
                 let query = `created: {${timestampInicio} .. ${timestampFim}}`;
+
+                // Filtrar apenas projetos que têm o campo Sprints
+                console.log(`📋 Filtrando por ${PROJETOS_COM_SPRINTS.length} projetos com Sprints:`, PROJETOS_COM_SPRINTS);
+                const projetosQuery = PROJETOS_COM_SPRINTS.map(projeto => `project: "${projeto}"`).join(' OR ');
+                query += ` AND (${projetosQuery})`;
 
                 // Adicionar filtro de sprint se uma está selecionada
                 if (sprintSelecionada) {
-                    query += ` Sprints: "${sprintSelecionada}"`;
+                    query += ` AND Sprints: "${sprintSelecionada}"`;
                     console.log('🔍 Buscando issues da sprint:', sprintSelecionada);
                 } else {
                     // Se não há sprint selecionada, pegar apenas issues que têm sprint atribuída
-                    query += ` has: Sprints`;
-                    console.log('🔍 Buscando issues com sprint atribuída...');
+                    query += ` AND has: Sprints`;
+                    console.log('🔍 Buscando issues com sprint atribuída dos projetos específicos...');
                 }
 
                 console.log('📅 Período:', new Date(timestampInicio).toLocaleDateString(), 'até', new Date(timestampFim).toLocaleDateString());
@@ -930,19 +1013,31 @@
             // Log para debug dos campos customizados
             if (issues.length > 0) {
                 const primeiraIssue = issues[0];
-                console.log('🔍 Campos da primeira issue:', {
-                    id: primeiraIssue.idReadable,
-                    state: primeiraIssue.state?.name,
-                    customFields: primeiraIssue.customFields ?
-                        primeiraIssue.customFields.map(cf => ({
-                            name: cf.name,
-                            hasValue: !!cf.value
-                        })) : 'Nenhum campo customizado'
-                });
+                console.log('🔍 Estrutura completa da primeira issue:');
+                console.log('  - ID:', primeiraIssue.idReadable);
+                console.log('  - State:', primeiraIssue.state?.name);
+                console.log('  - Project:', primeiraIssue.project?.name);
+                console.log('  - Custom Fields existem?', !!primeiraIssue.customFields);
+                console.log('  - Custom Fields é array?', Array.isArray(primeiraIssue.customFields));
+
+                if (primeiraIssue.customFields) {
+                    console.log('  - Número de custom fields:', primeiraIssue.customFields.length);
+                    console.log('  - Primeiros 3 campos:', primeiraIssue.customFields.slice(0, 3));
+                } else {
+                    console.log('  - ❌ customFields não existe na issue');
+                }
 
                 // Verificar se campo Sprints existe
                 const sprintValue = extrairCampoCustomizado(primeiraIssue, 'Sprints');
                 console.log('🏃‍♂️ Valor do campo Sprints na primeira issue:', sprintValue);
+
+                // Debug: mostrar todos os campos disponíveis
+                if (primeiraIssue.customFields && primeiraIssue.customFields.length > 0) {
+                    console.log('📝 Todos os campos customizados da primeira issue:');
+                    primeiraIssue.customFields.forEach((field, index) => {
+                        console.log(`  ${index + 1}. ${field.name} = ${field.value?.name || field.value || 'sem valor'}`);
+                    });
+                }
             }
 
             // Filtrar issues válidas (excluir BACKLOG e MOVED TO NEXT SPRINT)
@@ -1120,11 +1215,14 @@
                 ...ESTADOS_IGNORADOS
             ];
 
+            // Usar projetos reais que têm campo Sprints
             const projetos = [
-                { name: 'iMarinho Performance Dashboard', shortName: 'IPERF' },
-                { name: 'iMarinho YouTrack Integration', shortName: 'IYT' },
-                { name: 'iMarinho Analytics Platform', shortName: 'IANAL' },
-                { name: 'iMarinho Reporting Tools', shortName: 'IREP' }
+                { name: 'Braip App Mobile', shortName: 'BAM' },
+                { name: 'Braip New Platform', shortName: 'BNP' },
+                { name: 'Team DevOps', shortName: 'TDO' },
+                { name: 'Team Produtos', shortName: 'TPR' },
+                { name: 'Braip Tools - Canvas', shortName: 'BTC' },
+                { name: 'Braip Pagamentos', shortName: 'BP' }
             ];
 
             const sprintsExemplo = [
