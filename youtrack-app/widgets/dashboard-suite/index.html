@@ -670,6 +670,52 @@
         // Tornar função disponível globalmente
         window.limparFiltroSprint = limparFiltroSprint;
 
+        // Função para testar busca direta de issues com campo Sprints
+        async function testarBuscaSprintsDirecta() {
+            try {
+                console.group('🧪 Teste: Busca Direta de Issues com Sprints');
+
+                // Teste 1: Buscar qualquer issue que tenha campo Sprints
+                console.log('📋 Teste 1: Buscar issues com campo Sprints...');
+                const issuesComSprints = await host.fetchYouTrack('issues', {
+                    fields: 'id,idReadable,summary,project(name,shortName),customFields(name,value(name,id),field(name,fieldType))',
+                    query: 'has: Sprints',
+                    '$top': 5
+                });
+
+                console.log(`📊 Encontradas ${issuesComSprints.length} issues com campo Sprints`);
+                if (issuesComSprints.length > 0) {
+                    issuesComSprints.forEach((issue, index) => {
+                        const sprintsField = issue.customFields?.find(f => f.name === 'Sprints' || f.field?.name === 'Sprints');
+                        console.log(`  ${index + 1}. ${issue.idReadable} - Projeto: ${issue.project?.name} - Sprint: ${sprintsField?.value?.name || 'N/A'}`);
+                    });
+                }
+
+                // Teste 2: Verificar projetos específicos
+                console.log('📋 Teste 2: Verificar projetos específicos...');
+                for (const nomeProjeto of PROJETOS_COM_SPRINTS.slice(0, 3)) {
+                    try {
+                        const issuesProjeto = await host.fetchYouTrack('issues', {
+                            fields: 'id,idReadable,summary,customFields(name,value(name))',
+                            query: `project: "${nomeProjeto}" has: Sprints`,
+                            '$top': 2
+                        });
+                        console.log(`  ${nomeProjeto}: ${issuesProjeto.length} issues com Sprints`);
+                    } catch (error) {
+                        console.log(`  ${nomeProjeto}: Erro - ${error.message}`);
+                    }
+                }
+
+                console.groupEnd();
+                return issuesComSprints.length > 0;
+
+            } catch (error) {
+                console.error('❌ Erro no teste de busca direta:', error);
+                console.groupEnd();
+                return false;
+            }
+        }
+
         // Função para extrair valor de campo customizado (baseada no workflow)
         function extrairCampoCustomizado(issue, nomeCampo) {
             if (!issue.customFields || !Array.isArray(issue.customFields)) {
@@ -871,6 +917,14 @@
                         console.log('⚠️ Problemas detectados no campo Sprints');
                     }
 
+                    // Testar busca direta de issues com Sprints
+                    const buscaDirectaOK = await testarBuscaSprintsDirecta();
+                    if (buscaDirectaOK) {
+                        console.log('✅ Busca direta de issues com Sprints funcionando');
+                    } else {
+                        console.log('⚠️ Busca direta de issues com Sprints falhou');
+                    }
+
                     // Carregar sprints primeiro
                     await carregarSprints();
                 } else {
@@ -912,30 +966,30 @@
                 const timestampInicio = dataInicio.getTime();
                 const timestampFim = Date.now();
 
-                // Construir query do YouTrack filtrada por projetos com Sprints
-                let query = `created: {${timestampInicio} .. ${timestampFim}}`;
+                // Construir query do YouTrack de forma mais simples
+                let query = '';
 
-                // Filtrar apenas projetos que têm o campo Sprints
-                console.log(`📋 Filtrando por ${PROJETOS_COM_SPRINTS.length} projetos com Sprints:`, PROJETOS_COM_SPRINTS);
-                const projetosQuery = PROJETOS_COM_SPRINTS.map(projeto => `project: "${projeto}"`).join(' OR ');
-                query += ` AND (${projetosQuery})`;
+                // Começar com filtro básico de tempo
+                const dataInicioDias = Math.floor((Date.now() - timestampInicio) / (1000 * 60 * 60 * 24));
+                query = `created: ${dataInicioDias}d .. today`;
 
-                // Adicionar filtro de sprint se uma está selecionada
+                console.log(`📋 Filtrando por ${PROJETOS_COM_SPRINTS.length} projetos com Sprints`);
+
+                // Tentar primeiro uma abordagem mais simples - apenas com "has: Sprints"
                 if (sprintSelecionada) {
-                    query += ` AND Sprints: "${sprintSelecionada}"`;
+                    query += ` Sprints: "${sprintSelecionada}"`;
                     console.log('🔍 Buscando issues da sprint:', sprintSelecionada);
                 } else {
-                    // Se não há sprint selecionada, pegar apenas issues que têm sprint atribuída
-                    query += ` AND has: Sprints`;
-                    console.log('🔍 Buscando issues com sprint atribuída dos projetos específicos...');
+                    query += ` has: Sprints`;
+                    console.log('🔍 Buscando issues com sprint atribuída...');
                 }
 
                 console.log('📅 Período:', new Date(timestampInicio).toLocaleDateString(), 'até', new Date(timestampFim).toLocaleDateString());
                 console.log('🔍 Query YouTrack:', query);
 
-                // Fazer requisição correta incluindo campo Sprints
+                // Fazer requisição correta incluindo TODOS os campos customizados
                 const issues = await host.fetchYouTrack('issues', {
-                    fields: 'id,idReadable,summary,state(name),project(name,shortName),created,resolved,customFields(name,value(name,id))',
+                    fields: 'id,idReadable,summary,state(name),project(name,shortName),created,resolved,customFields(name,value(name,id,presentation,isResolved),field(name,fieldType))',
                     query: query,
                     '$top': 1000
                 });
