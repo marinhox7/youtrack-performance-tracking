@@ -99,6 +99,30 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
 
+        .metric-card-success {
+            border-left: 4px solid #28a745;
+        }
+
+        .metric-card-success .metric-value {
+            color: #28a745;
+        }
+
+        .metric-card-warning {
+            border-left: 4px solid #ffc107;
+        }
+
+        .metric-card-warning .metric-value {
+            color: #e67e22;
+        }
+
+        .metric-card-critical {
+            border-left: 4px solid #dc3545;
+        }
+
+        .metric-card-critical .metric-value {
+            color: #dc3545;
+        }
+
         .metric-value {
             font-size: 24px;
             font-weight: 700;
@@ -191,14 +215,28 @@
             hideError();
 
             try {
-                // Por enquanto, vamos usar dados de exemplo
-                const exampleData = generateExampleData();
+                // Tentar buscar dados reais da API do YouTrack
+                let issues = [];
+                let useRealData = false;
 
-                dashboardData.issues = exampleData;
+                try {
+                    issues = await fetchYouTrackIssues();
+                    useRealData = true;
+                    console.log('✅ Dados reais carregados da API do YouTrack');
+                } catch (apiError) {
+                    console.warn('⚠️ API indisponível, usando dados de exemplo:', apiError.message);
+                    issues = generateExampleData();
+                    showError('Usando dados de exemplo - API não acessível');
+                }
+
+                dashboardData.issues = issues;
                 calculateMetrics();
                 renderDashboard();
 
-                console.log('✅ Dashboard carregado com sucesso');
+                console.log('✅ Dashboard carregado com sucesso', {
+                    totalIssues: issues.length,
+                    dataSource: useRealData ? 'API Real' : 'Dados de Exemplo'
+                });
 
             } catch (error) {
                 console.error('❌ Erro ao carregar dashboard:', error);
@@ -208,22 +246,114 @@
             }
         }
 
+        // Função para buscar issues reais do YouTrack
+        async function fetchYouTrackIssues() {
+            console.log('🔍 Buscando dados reais do YouTrack...');
+
+            // Tentar usar API nativa do YouTrack se disponível
+            if (typeof YT !== 'undefined' && YT.fetch) {
+                console.log('✅ Usando YT.fetch (API nativa do widget)');
+                return await fetchWithYouTrackAPI();
+            }
+
+            // Fallback para fetch normal com configuração de widget
+            console.log('🔄 Tentando fetch normal com configuração de widget');
+            return await fetchWithStandardAPI();
+        }
+
+        // Buscar com API nativa do YouTrack
+        async function fetchWithYouTrackAPI() {
+            const query = 'created: -30d .. now'; // Últimas 4 semanas
+            const fields = 'id,idReadable,created,resolved,state(name),priority(name),project(name,shortName),assignee(name,fullName)';
+
+            const url = `/api/issues?fields=${fields}&query=${encodeURIComponent(query)}&$top=1000`;
+
+            console.log('🌐 Fazendo requisição via YT.fetch:', url);
+
+            const response = await YT.fetch(url);
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            console.log('📊 Issues recebidas:', data.length);
+
+            return data;
+        }
+
+        // Buscar com API padrão
+        async function fetchWithStandardAPI() {
+            // Para widgets, tentar usar URL relativa
+            const query = 'created: -30d .. now';
+            const fields = 'id,idReadable,created,resolved,state(name),priority(name),project(name,shortName),assignee(name,fullName)';
+
+            const url = `./api/issues?fields=${fields}&query=${encodeURIComponent(query)}&$top=1000`;
+
+            console.log('🌐 Fazendo requisição via fetch padrão:', url);
+
+            const response = await fetch(url, {
+                credentials: 'same-origin',
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            console.log('📊 Issues recebidas:', data.length);
+
+            return data;
+        }
+
         // Gerar dados de exemplo
         function generateExampleData() {
             console.log('📝 Gerando dados de exemplo...');
 
             const data = [];
-            const states = ['Aberto', 'Em Progresso', 'Resolvido', 'Fechado'];
+            const states = ['Aberto', 'Em Progresso', 'Resolvido', 'Fechado', 'Done'];
+            const priorities = ['Baixa', 'Média', 'Alta', 'Crítica'];
+            const projects = [
+                { name: 'Dashboard Performance', shortName: 'DASH' },
+                { name: 'YouTrack Widgets', shortName: 'YTW' },
+                { name: 'Analytics Suite', shortName: 'ANAL' },
+                { name: 'Reporting Tools', shortName: 'REP' }
+            ];
+            const assignees = [
+                { name: 'dev1', fullName: 'João Silva' },
+                { name: 'dev2', fullName: 'Maria Santos' },
+                { name: 'dev3', fullName: 'Pedro Costa' },
+                { name: 'dev4', fullName: 'Ana Oliveira' }
+            ];
 
-            for (let i = 1; i <= 20; i++) {
+            for (let i = 1; i <= 25; i++) {
+                const project = projects[Math.floor(Math.random() * projects.length)];
+                const state = states[Math.floor(Math.random() * states.length)];
+                const priority = priorities[Math.floor(Math.random() * priorities.length)];
+                const assignee = assignees[Math.floor(Math.random() * assignees.length)];
+
                 data.push({
                     id: i.toString(),
-                    idReadable: `DEMO-${i}`,
-                    state: { name: states[Math.floor(Math.random() * states.length)] },
+                    idReadable: `${project.shortName}-${i}`,
+                    state: { name: state },
+                    priority: { name: priority },
+                    project: project,
+                    assignee: assignee,
                     created: Date.now() - (Math.random() * 30 * 24 * 60 * 60 * 1000),
-                    priority: { name: ['Baixa', 'Média', 'Alta', 'Crítica'][Math.floor(Math.random() * 4)] }
+                    resolved: state === 'Resolvido' || state === 'Fechado' || state === 'Done'
+                        ? Date.now() - (Math.random() * 15 * 24 * 60 * 60 * 1000)
+                        : null
                 });
             }
+
+            console.log('📊 Dados de exemplo gerados:', {
+                totalIssues: data.length,
+                projects: [...new Set(data.map(d => d.project.name))].length,
+                states: [...new Set(data.map(d => d.state.name))]
+            });
 
             return data;
         }
@@ -235,22 +365,46 @@
             const issues = dashboardData.issues;
             const total = issues.length;
 
+            // Detectar issues resolvidas baseadas no estado
             const resolved = issues.filter(issue => {
                 const state = (issue.state?.name || '').toLowerCase();
-                return state.includes('resolvido') || state.includes('fechado');
+                return state.includes('resolvido') ||
+                       state.includes('resolved') ||
+                       state.includes('fechado') ||
+                       state.includes('closed') ||
+                       state.includes('concluído') ||
+                       state.includes('completed') ||
+                       state.includes('done');
             }).length;
 
+            // Issues ativas = Total - Resolvidas
             const active = total - resolved;
+
+            // Taxa de conclusão: (Resolvidas ÷ Total) × 100
             const completionRate = total > 0 ? Math.round((resolved / total) * 100) : 0;
+
+            // Contar projetos únicos
+            const uniqueProjects = new Set(
+                issues
+                    .map(issue => issue.project?.name)
+                    .filter(Boolean)
+            ).size;
 
             dashboardData.metrics = {
                 total,
                 resolved,
                 active,
-                completionRate
+                completionRate,
+                projects: uniqueProjects
             };
 
-            console.log('📊 Métricas calculadas:', dashboardData.metrics);
+            console.log('📊 Métricas calculadas:', {
+                'Total de Issues': total,
+                'Issues Resolvidas': resolved,
+                'Issues Ativas': active,
+                'Taxa de Conclusão': completionRate + '%',
+                'Projetos Únicos': uniqueProjects
+            });
         }
 
         // Renderizar dashboard
@@ -264,22 +418,30 @@
             const metrics = dashboardData.metrics;
             const grid = document.getElementById('metricsGrid');
 
+            // Determinar cor do card de taxa de conclusão
+            const completionClass = metrics.completionRate >= 80 ? 'success' :
+                                   metrics.completionRate >= 60 ? 'warning' : 'critical';
+
             grid.innerHTML = `
                 <div class="metric-card">
                     <div class="metric-value">${metrics.total}</div>
                     <div class="metric-label">Total de Issues</div>
                 </div>
-                <div class="metric-card">
+                <div class="metric-card metric-card-success">
                     <div class="metric-value">${metrics.resolved}</div>
                     <div class="metric-label">Issues Resolvidas</div>
                 </div>
-                <div class="metric-card">
+                <div class="metric-card metric-card-warning">
                     <div class="metric-value">${metrics.active}</div>
                     <div class="metric-label">Issues Ativas</div>
                 </div>
-                <div class="metric-card">
+                <div class="metric-card metric-card-${completionClass}">
                     <div class="metric-value">${metrics.completionRate}%</div>
                     <div class="metric-label">Taxa de Conclusão</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value">${metrics.projects}</div>
+                    <div class="metric-label">Projetos</div>
                 </div>
             `;
         }
