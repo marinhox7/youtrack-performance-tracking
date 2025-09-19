@@ -8,10 +8,15 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "upload": "npm run build && npm run deploy",
+    "deploy": "echo 'Deploy script - configure for your platform (Vercel, Netlify, etc.)'",
+    "deploy:vercel": "vercel --prod",
+    "deploy:netlify": "netlify deploy --prod --dir=.next",
+    "export": "next build && next export"
   },
   "keywords": [],
-  "author": "",
+  "author": "iMarinho",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {

@@ -1,4 +1,9 @@
 <!DOCTYPE html>
+<!--
+    Performance Dashboard Suite Widget
+    Developed by: iMarinho Team
+    Description: YouTrack performance metrics dashboard with 4 main KPI cards
+-->
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -196,10 +201,29 @@
         }
 
         // Função para mostrar erro
-        function showError(message) {
+        function showError(message, type = 'error') {
             const errorDiv = document.getElementById('error');
+
+            // Limpar classes existentes
+            errorDiv.className = 'error';
+
+            // Adicionar classe baseada no tipo
+            if (type === 'warning') {
+                errorDiv.style.background = '#fff8e1';
+                errorDiv.style.borderColor = '#ffcc02';
+                errorDiv.style.color = '#f57c00';
+            } else {
+                errorDiv.style.background = '#fff2f2';
+                errorDiv.style.borderColor = '#ffc6c6';
+                errorDiv.style.color = '#cc0000';
+            }
+
             errorDiv.textContent = message;
-            errorDiv.classList.remove('hidden');
+            if (message) {
+                errorDiv.classList.remove('hidden');
+            } else {
+                errorDiv.classList.add('hidden');
+            }
         }
 
         // Função para esconder erro
@@ -208,132 +232,357 @@
         }
 
         // Função principal para carregar dados
-        async function loadData() {
-            console.log('📊 Carregando dados do dashboard...');
-
-            showLoading(true);
-            hideError();
+        async function loadDashboardData() {
+            console.log('📡 Carregando dados do dashboard...');
 
             try {
-                // Tentar buscar dados reais da API do YouTrack
-                let issues = [];
-                let useRealData = false;
+                showLoading(true);
+                showError('');
 
+                // Tentar buscar dados reais primeiro
                 try {
-                    issues = await fetchYouTrackIssues();
-                    useRealData = true;
-                    console.log('✅ Dados reais carregados da API do YouTrack');
+                    const issues = await fetchYouTrackIssues();
+                    dashboardData.issues = issues;
+                    console.log('✅ Dados reais carregados:', issues.length, 'issues');
                 } catch (apiError) {
-                    console.warn('⚠️ API indisponível, usando dados de exemplo:', apiError.message);
-                    issues = generateExampleData();
-                    showError('Usando dados de exemplo - API não acessível');
+                    console.log('⚠️ API não disponível, usando dados de exemplo:', apiError.message);
+
+                    // Usar dados de exemplo mais realistas
+                    dashboardData.issues = generateRealisticExampleData();
+
+                    // Mostrar aviso mais informativo
+                    if (window.location.href.includes('about:') || window.location.href.includes('srcdoc')) {
+                        showError('💡 Widget rodando em modo de demonstração - usando dados de exemplo da iMarinho', 'warning');
+                    } else {
+                        showError('⚠️ API YouTrack não acessível - exibindo dados de exemplo', 'warning');
+                    }
                 }
 
-                dashboardData.issues = issues;
                 calculateMetrics();
                 renderDashboard();
 
-                console.log('✅ Dashboard carregado com sucesso', {
-                    totalIssues: issues.length,
-                    dataSource: useRealData ? 'API Real' : 'Dados de Exemplo'
-                });
-
             } catch (error) {
-                console.error('❌ Erro ao carregar dashboard:', error);
-                showError('Erro ao carregar dados: ' + error.message);
+                console.error('❌ Erro crítico ao carregar dashboard:', error);
+                showError('❌ Erro ao carregar dados: ' + error.message, 'error');
             } finally {
                 showLoading(false);
             }
+        }
+
+        // Wrapper para compatibilidade
+        async function loadData() {
+            await loadDashboardData();
+        }
+
+        // Função para detectar URL base do YouTrack
+        function detectYouTrackBaseUrl() {
+            try {
+                // Prioridade 1: Tentar acessar contexto do widget YT
+                if (typeof YT !== 'undefined' && YT.host) {
+                    console.log('✅ Contexto YT disponível, usando URLs relativas');
+                    return '';  // Use URLs relativas quando YT está disponível
+                }
+
+                // Prioridade 2: Verificar se há contexto de widget mesmo sem YT global
+                if (window.parent && window.parent !== window) {
+                    try {
+                        // Widget rodando em iframe - tentar acessar parent
+                        const parentHref = window.parent.location.href;
+                        if (parentHref && !parentHref.startsWith('about:') && parentHref.includes('youtrack')) {
+                            const url = new URL(parentHref);
+                            const baseUrl = `${url.protocol}//${url.host}`;
+                            console.log('🌐 URL base do parent iframe:', baseUrl);
+                            return baseUrl;
+                        }
+                    } catch (e) {
+                        console.log('⚠️ Parent window inacessível (CORS/sandbox)');
+                    }
+                }
+
+                // Prioridade 3: Verificar URL atual (não é about: ou srcdoc)
+                if (window.location.href &&
+                    !window.location.href.startsWith('about:') &&
+                    !window.location.href.includes('srcdoc')) {
+                    const url = new URL(window.location.href);
+                    const baseUrl = `${url.protocol}//${url.host}`;
+                    console.log('🌐 URL base da página atual:', baseUrl);
+                    return baseUrl;
+                }
+
+                // Prioridade 4: Verificar se estamos em contexto YouTrack via DOM
+                try {
+                    if (window.parent && window.parent.document) {
+                        const parentTitle = window.parent.document.title;
+                        if (parentTitle && parentTitle.includes('YouTrack')) {
+                            console.log('🌐 Detectado contexto YouTrack pelo título');
+                            return 'https://braiphub.youtrack.cloud'; // Usar fallback seguro
+                        }
+                    }
+                } catch (e) {
+                    // Ignorar erro de acesso cross-origin
+                }
+
+                // Fallback final: usar configuração conhecida
+                console.log('⚠️ Usando URL hardcoded como fallback final');
+                return 'https://braiphub.youtrack.cloud';
+
+            } catch (error) {
+                console.error('❌ Erro ao detectar URL base:', error);
+                return 'https://braiphub.youtrack.cloud';
+            }
+        }
+
+        // Função corrigida para usar API do YouTrack em widget
+        async function fetchWithAuth(url) {
+            console.log('🔍 Fazendo requisição para:', url);
+
+            try {
+                // Estratégia 1: Tentar acessar YT global via diferentes caminhos
+                let YTObject = null;
+
+                // Tentar YT direto
+                if (typeof YT !== 'undefined') {
+                    YTObject = YT;
+                    console.log('✅ YT encontrado globalmente');
+                }
+
+                // Tentar via window
+                else if (typeof window.YT !== 'undefined') {
+                    YTObject = window.YT;
+                    console.log('✅ YT encontrado via window.YT');
+                }
+
+                // Tentar via parent window
+                else if (window.parent && typeof window.parent.YT !== 'undefined') {
+                    YTObject = window.parent.YT;
+                    console.log('✅ YT encontrado via window.parent.YT');
+                }
+
+                // Tentar via top window
+                else if (window.top && typeof window.top.YT !== 'undefined') {
+                    YTObject = window.top.YT;
+                    console.log('✅ YT encontrado via window.top.YT');
+                }
+
+                // Se encontrou YT, tentar usar
+                if (YTObject && YTObject.fetch) {
+                    console.log('✅ Usando YT.fetch (API nativa do widget)');
+                    const relativeUrl = url.replace(/^https?:\/\/[^\/]+/, '');
+                    console.log('📍 URL relativa para YT.fetch:', relativeUrl);
+
+                    const response = await YTObject.fetch(relativeUrl);
+
+                    if (!response.ok) {
+                        throw new Error(`YT.fetch HTTP ${response.status}: ${response.statusText}`);
+                    }
+
+                    const data = await response.json();
+                    console.log('✅ Dados recebidos via YT.fetch:', data.length, 'issues');
+                    return data;
+                }
+
+                // Estratégia 2: Tentar via postMessage para parent
+                if (window.parent && window.parent !== window) {
+                    console.log('🔄 Tentando comunicação via postMessage com parent');
+
+                    return new Promise((resolve, reject) => {
+                        const timeout = setTimeout(() => {
+                            reject(new Error('Timeout na comunicação com parent window'));
+                        }, 10000);
+
+                        const messageHandler = (event) => {
+                            if (event.data && event.data.type === 'YOUTRACK_API_RESPONSE') {
+                                clearTimeout(timeout);
+                                window.removeEventListener('message', messageHandler);
+
+                                if (event.data.success) {
+                                    console.log('✅ Dados recebidos via postMessage:', event.data.data.length, 'issues');
+                                    resolve(event.data.data);
+                                } else {
+                                    reject(new Error(event.data.error));
+                                }
+                            }
+                        };
+
+                        window.addEventListener('message', messageHandler);
+
+                        const relativeUrl = url.replace(/^https?:\/\/[^\/]+/, '');
+                        window.parent.postMessage({
+                            type: 'YOUTRACK_API_REQUEST',
+                            url: relativeUrl
+                        }, '*');
+                    });
+                }
+
+                // Estratégia 3: fetch normal com URL relativa (última tentativa)
+                console.log('🔄 Tentando fetch padrão com URL relativa');
+                const relativeUrl = url.replace(/^https?:\/\/[^\/]+/, '');
+                console.log('📍 URL relativa para fetch:', relativeUrl);
+
+                const response = await fetch(relativeUrl, {
+                    credentials: 'same-origin',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Fetch HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                console.log('✅ Dados recebidos via fetch padrão:', data.length, 'issues');
+                return data;
+
+            } catch (error) {
+                console.error('💥 Erro na requisição:', error.message);
+
+                // Log detalhado para debug
+                console.log('🔧 Contexto de debug:', {
+                    'URL original': url,
+                    'YT global': typeof YT !== 'undefined',
+                    'window.YT': typeof window.YT !== 'undefined',
+                    'parent.YT': window.parent && typeof window.parent.YT !== 'undefined',
+                    'top.YT': window.top && typeof window.top.YT !== 'undefined',
+                    'window.location': window.location.href,
+                    'É iframe': window.parent !== window,
+                    'Parent acessível': window.parent !== window && window.parent
+                });
+
+                throw error;
+            }
+        }
+
+        // Função para aguardar carregamento do YT
+        function waitForYT(timeout = 5000) {
+            return new Promise((resolve) => {
+                let attempts = 0;
+                const maxAttempts = timeout / 100;
+
+                const checkYT = () => {
+                    attempts++;
+
+                    // Verificar diferentes caminhos para YT
+                    if (typeof YT !== 'undefined' && YT.fetch) {
+                        console.log('✅ YT carregado após', attempts * 100, 'ms');
+                        resolve(YT);
+                        return;
+                    }
+
+                    if (typeof window.YT !== 'undefined' && window.YT.fetch) {
+                        console.log('✅ window.YT carregado após', attempts * 100, 'ms');
+                        resolve(window.YT);
+                        return;
+                    }
+
+                    if (window.parent && typeof window.parent.YT !== 'undefined' && window.parent.YT.fetch) {
+                        console.log('✅ parent.YT carregado após', attempts * 100, 'ms');
+                        resolve(window.parent.YT);
+                        return;
+                    }
+
+                    if (window.top && typeof window.top.YT !== 'undefined' && window.top.YT.fetch) {
+                        console.log('✅ top.YT carregado após', attempts * 100, 'ms');
+                        resolve(window.top.YT);
+                        return;
+                    }
+
+                    if (attempts < maxAttempts) {
+                        setTimeout(checkYT, 100);
+                    } else {
+                        console.log('⏰ Timeout aguardando YT após', timeout, 'ms');
+                        resolve(null);
+                    }
+                };
+
+                checkYT();
+            });
         }
 
         // Função para buscar issues reais do YouTrack
         async function fetchYouTrackIssues() {
             console.log('🔍 Buscando dados reais do YouTrack...');
 
-            // Tentar usar API nativa do YouTrack se disponível
-            if (typeof YT !== 'undefined' && YT.fetch) {
-                console.log('✅ Usando YT.fetch (API nativa do widget)');
-                return await fetchWithYouTrackAPI();
+            // Tentar aguardar carregamento do YT primeiro
+            console.log('⏳ Aguardando carregamento do YT...');
+            const YTObject = await waitForYT(3000);
+
+            if (YTObject) {
+                console.log('✅ YT carregado, usando API nativa');
+                const query = 'created: -30d .. now';
+                const fields = 'id,idReadable,created,resolved,state(name),priority(name),project(name,shortName),assignee(name,fullName)';
+                const relativeUrl = `/api/issues?fields=${fields}&query=${encodeURIComponent(query)}&$top=1000`;
+
+                try {
+                    const response = await YTObject.fetch(relativeUrl);
+                    if (!response.ok) {
+                        throw new Error(`YT.fetch HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    const data = await response.json();
+                    console.log('✅ Dados carregados via YT.fetch:', data.length, 'issues');
+                    return data;
+                } catch (error) {
+                    console.error('❌ Erro com YT.fetch:', error.message);
+                    // Continuar para fallback
+                }
             }
 
-            // Fallback para fetch normal com configuração de widget
-            console.log('🔄 Tentando fetch normal com configuração de widget');
-            return await fetchWithStandardAPI();
-        }
-
-        // Buscar com API nativa do YouTrack
-        async function fetchWithYouTrackAPI() {
-            const query = 'created: -30d .. now'; // Últimas 4 semanas
-            const fields = 'id,idReadable,created,resolved,state(name),priority(name),project(name,shortName),assignee(name,fullName)';
-
-            const url = `/api/issues?fields=${fields}&query=${encodeURIComponent(query)}&$top=1000`;
-
-            console.log('🌐 Fazendo requisição via YT.fetch:', url);
-
-            const response = await YT.fetch(url);
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            const data = await response.json();
-            console.log('📊 Issues recebidas:', data.length);
-
-            return data;
-        }
-
-        // Buscar com API padrão
-        async function fetchWithStandardAPI() {
-            // Para widgets, tentar usar URL relativa
+            // Fallback para método anterior
+            const baseUrl = detectYouTrackBaseUrl();
             const query = 'created: -30d .. now';
             const fields = 'id,idReadable,created,resolved,state(name),priority(name),project(name,shortName),assignee(name,fullName)';
 
-            const url = `./api/issues?fields=${fields}&query=${encodeURIComponent(query)}&$top=1000`;
+            const url = `${baseUrl}/api/issues?fields=${fields}&query=${encodeURIComponent(query)}&$top=1000`;
 
-            console.log('🌐 Fazendo requisição via fetch padrão:', url);
-
-            const response = await fetch(url, {
-                credentials: 'same-origin',
-                headers: {
-                    'Accept': 'application/json'
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            const data = await response.json();
-            console.log('📊 Issues recebidas:', data.length);
-
-            return data;
+            return await fetchWithAuth(url);
         }
 
-        // Gerar dados de exemplo
-        function generateExampleData() {
-            console.log('📝 Gerando dados de exemplo...');
+
+        // Gerar dados de exemplo realistas
+        function generateRealisticExampleData() {
+            console.log('📝 Gerando dados de exemplo realistas...');
 
             const data = [];
-            const states = ['Aberto', 'Em Progresso', 'Resolvido', 'Fechado', 'Done'];
-            const priorities = ['Baixa', 'Média', 'Alta', 'Crítica'];
-            const projects = [
-                { name: 'Dashboard Performance', shortName: 'DASH' },
-                { name: 'YouTrack Widgets', shortName: 'YTW' },
-                { name: 'Analytics Suite', shortName: 'ANAL' },
-                { name: 'Reporting Tools', shortName: 'REP' }
-            ];
-            const assignees = [
-                { name: 'dev1', fullName: 'João Silva' },
-                { name: 'dev2', fullName: 'Maria Santos' },
-                { name: 'dev3', fullName: 'Pedro Costa' },
-                { name: 'dev4', fullName: 'Ana Oliveira' }
+
+            // Estados reais em MAIÚSCULAS
+            const states = [
+                'DONE', 'CLOSED', 'PRODUCTION',           // Resolvidos
+                'IN DEVELOPMENT', 'CORRECTION', 'READY TO REVIEW', 'REVIEWING', 'APPROVED', // Ativos
+                'OPEN', 'PAUSED',                         // Outros estados
+                'BACKLOG', 'MOVED TO NEXT SPRINT'         // Ignorados
             ];
 
-            for (let i = 1; i <= 25; i++) {
+            const priorities = ['Low', 'Normal', 'High', 'Critical'];
+            const projects = [
+                { name: 'Performance Dashboard', shortName: 'PERF' },
+                { name: 'YouTrack Integration', shortName: 'YT' },
+                { name: 'Analytics Platform', shortName: 'ANAL' },
+                { name: 'Reporting Tools', shortName: 'REP' }
+            ];
+
+            // Gerar 50 issues de exemplo com distribuição realista
+            for (let i = 1; i <= 50; i++) {
                 const project = projects[Math.floor(Math.random() * projects.length)];
-                const state = states[Math.floor(Math.random() * states.length)];
+
+                // Distribuição mais realista dos estados
+                let state;
+                const rand = Math.random();
+                if (rand < 0.3) {
+                    // 30% resolvidos
+                    state = ['DONE', 'CLOSED', 'PRODUCTION'][Math.floor(Math.random() * 3)];
+                } else if (rand < 0.7) {
+                    // 40% ativos
+                    state = ['IN DEVELOPMENT', 'CORRECTION', 'READY TO REVIEW', 'REVIEWING', 'APPROVED'][Math.floor(Math.random() * 5)];
+                } else if (rand < 0.85) {
+                    // 15% outros estados
+                    state = ['OPEN', 'PAUSED'][Math.floor(Math.random() * 2)];
+                } else {
+                    // 15% ignorados
+                    state = ['BACKLOG', 'MOVED TO NEXT SPRINT'][Math.floor(Math.random() * 2)];
+                }
+
                 const priority = priorities[Math.floor(Math.random() * priorities.length)];
-                const assignee = assignees[Math.floor(Math.random() * assignees.length)];
 
                 data.push({
                     id: i.toString(),
@@ -341,21 +590,31 @@
                     state: { name: state },
                     priority: { name: priority },
                     project: project,
-                    assignee: assignee,
+                    assignee: {
+                        name: `imarinho${i % 5}`,
+                        fullName: `iMarinho Dev ${i % 5}`
+                    },
                     created: Date.now() - (Math.random() * 30 * 24 * 60 * 60 * 1000),
-                    resolved: state === 'Resolvido' || state === 'Fechado' || state === 'Done'
+                    resolved: ['DONE', 'CLOSED', 'PRODUCTION'].includes(state)
                         ? Date.now() - (Math.random() * 15 * 24 * 60 * 60 * 1000)
                         : null
                 });
             }
 
             console.log('📊 Dados de exemplo gerados:', {
-                totalIssues: data.length,
-                projects: [...new Set(data.map(d => d.project.name))].length,
-                states: [...new Set(data.map(d => d.state.name))]
+                total: data.length,
+                porEstado: data.reduce((acc, issue) => {
+                    acc[issue.state.name] = (acc[issue.state.name] || 0) + 1;
+                    return acc;
+                }, {})
             });
 
             return data;
+        }
+
+        // Gerar dados de exemplo (compatibilidade)
+        function generateExampleData() {
+            return generateRealisticExampleData();
         }
 
         // Calcular métricas
@@ -363,29 +622,55 @@
             console.log('🔢 Calculando métricas...');
 
             const issues = dashboardData.issues;
-            const total = issues.length;
 
-            // Detectar issues resolvidas baseadas no estado
-            const resolved = issues.filter(issue => {
-                const state = (issue.state?.name || '').toLowerCase();
-                return state.includes('resolvido') ||
-                       state.includes('resolved') ||
-                       state.includes('fechado') ||
-                       state.includes('closed') ||
-                       state.includes('concluído') ||
-                       state.includes('completed') ||
-                       state.includes('done');
+            // Estados que devem ser IGNORADOS do cálculo (em maiúsculas)
+            const excludedStates = [
+                'BACKLOG',
+                'MOVED TO NEXT SPRINT'
+            ];
+
+            // Estados considerados como RESOLVIDOS (em maiúsculas)
+            const resolvedStates = [
+                'DONE',
+                'CLOSED',
+                'PRODUCTION'
+            ];
+
+            // Estados considerados como ATIVOS (em maiúsculas)
+            const activeStates = [
+                'IN DEVELOPMENT',
+                'CORRECTION',
+                'READY TO REVIEW',
+                'REVIEWING',
+                'APPROVED'
+            ];
+
+            // Filtrar issues excluídas (ignorar BACKLOG e MOVED TO NEXT SPRINT)
+            const validIssues = issues.filter(issue => {
+                const state = (issue.state?.name || '').toUpperCase().trim();
+                return !excludedStates.includes(state);
+            });
+
+            const total = validIssues.length;
+
+            // Contar issues resolvidas (DONE, CLOSED, PRODUCTION)
+            const resolved = validIssues.filter(issue => {
+                const state = (issue.state?.name || '').toUpperCase().trim();
+                return resolvedStates.includes(state);
             }).length;
 
-            // Issues ativas = Total - Resolvidas
-            const active = total - resolved;
+            // Contar issues ativas (IN DEVELOPMENT, CORRECTION, READY TO REVIEW, REVIEWING, APPROVED)
+            const active = validIssues.filter(issue => {
+                const state = (issue.state?.name || '').toUpperCase().trim();
+                return activeStates.includes(state);
+            }).length;
 
-            // Taxa de conclusão: (Resolvidas ÷ Total) × 100
+            // Taxa de conclusão: (Resolvidas ÷ Total válidas) × 100
             const completionRate = total > 0 ? Math.round((resolved / total) * 100) : 0;
 
-            // Contar projetos únicos
+            // Contar projetos únicos (apenas issues válidas)
             const uniqueProjects = new Set(
-                issues
+                validIssues
                     .map(issue => issue.project?.name)
                     .filter(Boolean)
             ).size;
@@ -399,11 +684,15 @@
             };
 
             console.log('📊 Métricas calculadas:', {
-                'Total de Issues': total,
+                'Total de Issues (válidas)': total,
                 'Issues Resolvidas': resolved,
                 'Issues Ativas': active,
+                'Estados resolvidos': resolvedStates.join(', '),
+                'Estados ativos': activeStates.join(', '),
+                'Estados ignorados': excludedStates.join(', '),
                 'Taxa de Conclusão': completionRate + '%',
-                'Projetos Únicos': uniqueProjects
+                'Projetos Únicos': uniqueProjects,
+                'Issues excluídas do cálculo': issues.length - total
             });
         }
 

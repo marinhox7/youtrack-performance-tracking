@@ -1,12 +1,12 @@
 {
   "key": "youtrack-performance-dashboard",
-  "name": "performance-dashboard",
-  "version": "1.0.0",
-  "description": "Dashboard gerencial para análise de KPIs e métricas de performance do YouTrack",
+  "name": "imarinho-performance-dashboard",
+  "version": "1.0.1",
+  "description": "Dashboard iMarinho para análise de KPIs e métricas de performance do YouTrack",
   "vendor": {
-    "name": "brainhub",
-    "email": "dev@brainhub.com",
-    "url": "https://brainhub.com"
+    "name": "iMarinho",
+    "email": "dev@imarinho.com",
+    "url": "https://imarinho.com"
   },
   "minYouTrackVersion": "2023.1.0",
   "maxYouTrackVersion": "2025.3.0",
@@ -23,9 +23,9 @@
   ],
   "widgets": [
     {
-      "key": "performance-dashboard-suite",
-      "name": "performance-dashboard-suite",
-      "description": "Suite completa de análise de performance com KPIs, gráficos e métricas em tempo real",
+      "key": "imarinho-performance-dashboard-suite",
+      "name": "iMarinho Performance Dashboard Suite",
+      "description": "iMarinho - Suite completa de análise de performance com KPIs, gráficos e métricas em tempo real",
       "extensionPoint": "DASHBOARD_WIDGET",
       "indexPath": "widgets/dashboard-suite/index.html"
     }
