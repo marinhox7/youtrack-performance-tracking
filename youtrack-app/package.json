@@ -6,7 +6,7 @@
     "scripts": {
         "dev": "http-server . --cors -c-1 -p 9033",
         "dev-https": "npx ngrok http 9033",
-        "build": "powershell \"Compress-Archive -Path manifest.json,widgets,README.md,icon.svg -DestinationPath youtrack-performance-dashboard-v2.zip -Force\"",
+        "build": "powershell \"Compress-Archive -Path manifest.json,widgets,README.md,icon.svg,icon-dark.svg -DestinationPath youtrack-performance-dashboard-v2.zip -Force\"",
         "clean": "del *.zip",
         "upload": "node upload.js",
         "test": "echo 'Abra http://localhost:9033 para testar o widget'"

@@ -6,6 +6,7 @@
     "version": "2.0.0",
     "url": "https://github.com/imarinho/youtrack-performance-tracking",
     "icon": "icon.svg",
+    "iconDark": "icon-dark.svg",
     "minYouTrackVersion": "2024.1.0",
     "vendor": {
         "name": "iMarinho",
@@ -19,6 +20,7 @@
             "description": "Suite completa de métricas: Total de Issues, Issues Resolvidas, Issues Ativas, Taxa de Conclusão - por iMarinho",
             "extensionPoint": "DASHBOARD_WIDGET",
             "indexPath": "widgets/dashboard-suite/index.html",
+            "iconPath": "widgets/dashboard-suite/widget-icon.svg",
             "permissions": [
                 "READ_ISSUE",
                 "READ_PROJECT",

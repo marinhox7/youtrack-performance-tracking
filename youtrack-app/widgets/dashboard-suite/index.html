@@ -43,7 +43,18 @@
             margin: 0;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 12px;
+        }
+
+        .imarinho-logo {
+            width: 32px;
+            height: 32px;
+            opacity: 0.9;
+            transition: opacity 0.2s ease;
+        }
+
+        .imarinho-logo:hover {
+            opacity: 1;
         }
 
         .refresh-button {
@@ -318,7 +329,8 @@
 <body>
     <div class="dashboard-header">
         <h1 class="dashboard-title">
-            📊 iMarinho Performance Dashboard
+            <img src="widget-icon.svg" alt="iMarinho" class="imarinho-logo">
+            iMarinho Performance Dashboard
         </h1>
         <button class="refresh-button" id="refreshBtn" onclick="carregarDados()">
             🔄 <span id="refreshText">Atualizar</span>
@@ -399,6 +411,78 @@
         const debugGroupCollapsed = (...args) => { if (ENABLE_DEBUG_LOGS) console.groupCollapsed(...args); };
         const debugGroupEnd = () => { if (ENABLE_DEBUG_LOGS) console.groupEnd(); };
 
+        // Função utilitária para retry com backoff exponencial
+        async function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    return await fn();
+                } catch (error) {
+                    if (attempt === maxRetries - 1) {
+                        throw error;
+                    }
+
+                    const delay = baseDelay * Math.pow(2, attempt);
+                    debugLog(`⏱️ Tentativa ${attempt + 1} falhou, tentando novamente em ${delay}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+
+        async function fetchSprintsFromAgile() {
+            debugLog('🔍 fetchSprintsFromAgile: Buscando sprints via API Agile...');
+
+            try {
+                // Primeiro, buscar boards ágeis disponíveis com retry
+                const agileBoards = await retryWithBackoff(async () => {
+                    return await host.fetchYouTrack('agiles', {
+                        fields: 'id,name,status,orphansAtTheTop,estimationField,sprintsSettings'
+                    });
+                });
+
+                debugLog('📊 Boards ágeis encontrados:', agileBoards.length);
+
+                if (agileBoards.length === 0) {
+                    debugWarn('❌ Nenhum board ágil encontrado');
+                    return [];
+                }
+
+                // Usar o primeiro board ágil ativo
+                const activeBoard = agileBoards.find(board => board.status === 'ACTIVE') || agileBoards[0];
+                debugLog('✅ Usando board ágil:', { id: activeBoard.id, name: activeBoard.name });
+
+                // Buscar sprints do board com retry
+                const sprints = await retryWithBackoff(async () => {
+                    return await host.fetchYouTrack(`agiles/${activeBoard.id}/sprints`, {
+                        fields: 'id,name,start,finish,archived,unresolvedIssuesCount,issues(id,summary,state(name))'
+                    });
+                });
+
+                debugLog('📋 Sprints encontrados:', sprints.length);
+
+                // Filtrar sprints ativos (não arquivados)
+                const activeSprints = sprints.filter(sprint => !sprint.archived);
+                debugLog('📋 Sprints ativos:', activeSprints.length);
+
+                return activeSprints.map(sprint => ({
+                    id: sprint.id,
+                    name: sprint.name,
+                    start: sprint.start,
+                    finish: sprint.finish,
+                    unresolvedIssuesCount: sprint.unresolvedIssuesCount || 0,
+                    archived: false
+                }));
+
+            } catch (error) {
+                debugWarn('❌ Erro ao buscar sprints via API Agile:', error.message);
+                debugLog('📄 Detalhes do erro:', {
+                    status: error.status,
+                    data: error.data,
+                    message: error.message
+                });
+                return [];
+            }
+        }
+
         async function fetchBundleValues(bundleId) {
             debugLog('🔍 fetchBundleValues chamado com bundleId:', bundleId);
 
@@ -408,8 +492,12 @@
             }
 
             const endpoints = [
-                `admin/customFieldSettings/bundles/${bundleId}`,
-                `admin/customFieldSettings/bundles/version/${bundleId}`
+                `admin/customFieldSettings/bundles/enum/${bundleId}`,
+                `admin/customFieldSettings/bundles/version/${bundleId}`,
+                `admin/customFieldSettings/bundles/state/${bundleId}`,
+                `admin/customFieldSettings/bundles/ownedField/${bundleId}`,
+                `admin/customFieldSettings/bundles/build/${bundleId}`,
+                `admin/customFieldSettings/bundles/user/${bundleId}`
             ];
 
             debugLog('📍 Testando endpoints para bundle:', endpoints);
@@ -478,9 +566,22 @@
                 debugLog('🏃‍♂️ Carregando sprints disponíveis...');
                 debugGroup('📊 CARREGAMENTO DE SPRINTS - INÍCIO');
 
-                // Método 1: Buscar campo Sprints nos projetos específicos que têm este campo
+                // Método 1: Buscar sprints via API Agile (método preferido)
+                debugLog('🔍 Método 1: Buscando sprints via API Agile...');
+
+                const agileSprints = await fetchSprintsFromAgile();
+
+                if (agileSprints.length > 0) {
+                    debugLog('✅ Sprints encontrados via API Agile:', agileSprints.length);
+                    dashboardData.sprints = agileSprints;
+                    atualizarDropdownSprints();
+                    debugGroupEnd();
+                    return;
+                }
+
+                // Método 2: Buscar campo Sprints nos projetos específicos que têm este campo (fallback)
                 try {
-                    debugLog('🔍 Método 1: Buscando projetos via admin/projects...');
+                    debugLog('🔍 Método 2: Buscando projetos via admin/projects...');
 
                     const projects = await host.fetchYouTrack('admin/projects', {
                         fields: 'id,name,shortName',
@@ -609,16 +710,19 @@
                     });
                 }
 
-                // Método 2: Buscar bundles globalmente (fallback)
-                debugLog('🔍 Método 2: Buscando bundles globalmente...');
+                // Método 3: Buscar bundles globalmente (fallback final)
+                debugLog('🔍 Método 3: Buscando bundles globalmente...');
                 let bundles = [];
 
                 // Tentar diferentes endpoints para encontrar bundles
                 const endpoints = [
-                    'admin/customFieldSettings/bundles',
+                    'admin/customFieldSettings/bundles/enum',
                     'admin/customFieldSettings/bundles/version',
-                    'admin/bundles',
-                    'bundles'
+                    'admin/customFieldSettings/bundles/state',
+                    'admin/customFieldSettings/bundles/ownedField',
+                    'admin/customFieldSettings/bundles/build',
+                    'admin/customFieldSettings/bundles/user',
+                    'agiles'  // Alternativa para buscar sprints via agile boards
                 ];
 
                 debugLog('📍 Endpoints de bundles a testar:', endpoints);

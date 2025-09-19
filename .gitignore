@@ -103,5 +103,24 @@ Thumbs.db
 # YouTrack plugin builds
 youtrack-app/*.zip
 
+# Build artifacts
+tsconfig.tsbuildinfo
+
+# Icon pack files (already extracted)
+*.zip
+imarinho-youtrack-icon-pack.zip
+manifest-snippet.json
+README-icons.txt
+
+# Test files
+test-widget.html
+
+# Extracted icons at root level (copied to youtrack-app)
+icon.svg
+icon-dark.svg
+
 # Claude Code settings (contain sensitive info)
 .claude/
+
+# Temporary extraction directories
+temp-extract/
