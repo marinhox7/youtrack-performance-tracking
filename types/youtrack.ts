@@ -59,3 +59,25 @@ export interface ChartData {
   value: number
   [key: string]: any
 }
+
+export interface PerformanceMetrics {
+  totalIssues: number
+  resolvedIssues: number
+  activeIssues: number
+  completionRate: number
+}
+
+export interface IssueWithState {
+  id: string
+  idReadable: string
+  summary: string
+  state: {
+    name: string
+  }
+  created: number
+  resolved?: number
+  project: {
+    name: string
+    shortName: string
+  }
+}

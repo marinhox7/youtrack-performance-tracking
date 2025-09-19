@@ -1,69 +1,23 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { YouTrackIssue, DashboardKPI, ChartData } from '@/types/youtrack'
-import { youTrackAPI } from '@/lib/youtrack-api'
-import { KPICalculator } from '@/lib/kpi-calculator'
-import { KPICard } from '@/components/KPICard'
-import { PieChart } from '@/components/PieChart'
-import { LineChart } from '@/components/LineChart'
-import { BarChart } from '@/components/BarChart'
-import { DashboardHeader } from '@/components/DashboardHeader'
+import { PerformanceMetrics } from '@/types/youtrack'
+import { PerformanceAPI } from '@/lib/performance-api'
+import { MetricCard } from '@/components/MetricCard'
 
 export default function Dashboard() {
-  const [issues, setIssues] = useState<YouTrackIssue[]>([])
-  const [kpis, setKpis] = useState<DashboardKPI[]>([])
-  const [charts, setCharts] = useState<{
-    priorityData: ChartData[]
-    projectData: ChartData[]
-    stateData: ChartData[]
-    timelineData: ChartData[]
-    teamData: ChartData[]
-  }>({
-    priorityData: [],
-    projectData: [],
-    stateData: [],
-    timelineData: [],
-    teamData: []
-  })
+  const [metrics, setMetrics] = useState<PerformanceMetrics | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const loadData = async () => {
+  const loadData = async (forceRefresh: boolean = false) => {
     try {
       setIsLoading(true)
       setError(null)
 
-      // Carregar issues dos últimos 30 dias
-      const endDate = new Date()
-      const startDate = new Date(endDate.getTime() - (30 * 24 * 60 * 60 * 1000))
-
-      const issuesData = await youTrackAPI.getIssuesByDateRange(startDate, endDate)
-      setIssues(issuesData)
-
-      // Calcular KPIs
-      const totalIssues = KPICalculator.calculateTotalIssues(issuesData)
-      const resolvedIssues = KPICalculator.calculateResolvedIssues(issuesData)
-      const avgResolutionTime = KPICalculator.calculateAverageResolutionTime(issuesData)
-
-      setKpis([totalIssues, resolvedIssues, avgResolutionTime])
-
-      // Calcular dados para gráficos
-      const priorityData = KPICalculator.calculateIssuesByPriority(issuesData)
-      const projectData = KPICalculator.calculateIssuesByProject(issuesData)
-      const stateData = KPICalculator.calculateIssuesByState(issuesData)
-      const timelineData = KPICalculator.calculateIssuesCreatedOverTime(issuesData)
-      const teamData = KPICalculator.calculateTeamPerformance(issuesData)
-
-      setCharts({
-        priorityData,
-        projectData,
-        stateData,
-        timelineData,
-        teamData
-      })
-
+      const performanceMetrics = await PerformanceAPI.getPerformanceMetrics(forceRefresh)
+      setMetrics(performanceMetrics)
       setLastUpdated(new Date())
     } catch (err) {
       console.error('Erro ao carregar dados:', err)
@@ -75,12 +29,18 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadData()
+
+    // Auto-refresh every 30 seconds
+    const interval = setInterval(() => {
+      loadData()
+    }, 30000)
+
+    return () => clearInterval(interval)
   }, [])
 
   if (error && !lastUpdated) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <DashboardHeader onRefresh={loadData} lastUpdated={lastUpdated} isLoading={isLoading} />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="bg-red-50 border border-red-200 rounded-md p-4">
             <div className="flex">
@@ -104,40 +64,134 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <DashboardHeader onRefresh={loadData} lastUpdated={lastUpdated} isLoading={isLoading} />
+      {/* Header */}
+      <header className="bg-white shadow">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-6">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">YouTrack Performance Dashboard</h1>
+              <p className="mt-1 text-sm text-gray-500">
+                Acompanhe as métricas de performance do seu projeto
+              </p>
+            </div>
+            <div className="flex items-center space-x-4">
+              {lastUpdated && (
+                <p className="text-sm text-gray-500">
+                  Última atualização: {lastUpdated.toLocaleTimeString('pt-BR')}
+                </p>
+              )}
+              <button
+                onClick={() => loadData(true)}
+                disabled={isLoading}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Atualizando...
+                  </>
+                ) : (
+                  '🔄 Atualizar'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
 
+      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* KPIs */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {kpis.map((kpi, index) => (
-            <KPICard key={index} kpi={kpi} />
-          ))}
+        {/* Performance Metrics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <MetricCard
+            title="Total de Issues"
+            value={metrics?.totalIssues || 0}
+            icon="📊"
+            color="blue"
+            isLoading={isLoading}
+          />
+          <MetricCard
+            title="Issues Resolvidas"
+            value={metrics?.resolvedIssues || 0}
+            icon="✅"
+            color="green"
+            isLoading={isLoading}
+          />
+          <MetricCard
+            title="Issues Ativas"
+            value={metrics?.activeIssues || 0}
+            icon="🚀"
+            color="orange"
+            isLoading={isLoading}
+          />
+          <MetricCard
+            title="Taxa de Conclusão"
+            value={metrics ? `${metrics.completionRate}%` : '0%'}
+            icon="📈"
+            color="purple"
+            isLoading={isLoading}
+          />
         </div>
 
-        {/* Gráficos */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          <PieChart data={charts.priorityData} title="Issues por Prioridade" />
-          <PieChart data={charts.stateData} title="Issues por Estado" />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          <BarChart data={charts.projectData} title="Issues por Projeto" />
-          <BarChart data={charts.teamData} title="Performance da Equipe" />
-        </div>
-
-        <div className="grid grid-cols-1 gap-6">
-          <LineChart data={charts.timelineData} title="Issues Criadas ao Longo do Tempo" />
-        </div>
-
+        {/* Error Alert */}
         {error && (
-          <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-md p-4">
+          <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-md p-4">
             <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
               <div className="ml-3">
                 <h3 className="text-sm font-medium text-yellow-800">
                   Aviso
                 </h3>
                 <div className="mt-2 text-sm text-yellow-700">
                   <p>{error}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Summary Section */}
+        {metrics && !isLoading && (
+          <div className="bg-white shadow rounded-lg p-6">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Resumo das Métricas</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h3 className="text-sm font-medium text-gray-500">Status das Issues</h3>
+                <div className="mt-2 space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-700">Total de Issues:</span>
+                    <span className="text-sm font-medium text-gray-900">{metrics.totalIssues}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-700">Issues Resolvidas:</span>
+                    <span className="text-sm font-medium text-emerald-600">{metrics.resolvedIssues}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-700">Issues Ativas:</span>
+                    <span className="text-sm font-medium text-amber-600">{metrics.activeIssues}</span>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-gray-500">Performance</h3>
+                <div className="mt-2">
+                  <div className="flex justify-between mb-2">
+                    <span className="text-sm text-gray-700">Taxa de Conclusão:</span>
+                    <span className="text-sm font-medium text-violet-600">{metrics.completionRate}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-violet-500 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${Math.min(metrics.completionRate, 100)}%` }}
+                    ></div>
+                  </div>
                 </div>
               </div>
             </div>
