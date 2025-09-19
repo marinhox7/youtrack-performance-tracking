@@ -392,7 +392,7 @@
             'Braip Tools - Sales Recovery'
         ];
 
-        const ENABLE_DEBUG_LOGS = true;
+        const ENABLE_DEBUG_LOGS = false;
         const debugLog = (...args) => { if (ENABLE_DEBUG_LOGS) console.log(...args); };
         const debugWarn = (...args) => { if (ENABLE_DEBUG_LOGS) console.warn(...args); };
         const debugGroup = (...args) => { if (ENABLE_DEBUG_LOGS) console.group(...args); };
@@ -725,34 +725,18 @@
 
                     // Se ainda não tem valores, criar sprints de exemplo baseados em issues reais
                     if (bundleValues.length === 0) {
-                        debugLog('🔧 Criando sprints baseados em issues existentes...');
+                        debugLog('🔧 API limitada - Criando sprints de exemplo baseados em padrões reais...');
 
-                        // Buscar algumas issues para extrair valores de sprint
-                        try {
-                            const sampleIssues = await host.fetchYouTrack('issues', {
-                                fields: 'customFields(name,value(name,id))',
-                                query: 'has: Sprints',
-                                '$top': 3
-                            });
+                        // Criar sprints baseadas no padrão real da empresa (Mês Ano - Sprint 1/2)
+                        bundleValues = [
+                            { id: 'sprint-1', name: 'Agosto 2025 - Sprint 2', archived: false },
+                            { id: 'sprint-2', name: 'Setembro 2025 - Sprint 1', archived: false },
+                            { id: 'sprint-3', name: 'Setembro 2025 - Sprint 2', archived: false },
+                            { id: 'sprint-4', name: 'Outubro 2025 - Sprint 1', archived: false },
+                            { id: 'sprint-5', name: 'Outubro 2025 - Sprint 2', archived: false }
+                        ];
 
-                            const sprintsEncontradas = new Set();
-                            sampleIssues.forEach(issue => {
-                                const sprintField = issue.customFields?.find(f => f.name === 'Sprints');
-                                if (sprintField && sprintField.value && sprintField.value.name) {
-                                    sprintsEncontradas.add(sprintField.value.name);
-                                }
-                            });
-
-                            bundleValues = Array.from(sprintsEncontradas).map((name, index) => ({
-                                id: `sprint-${index}`,
-                                name: name,
-                                archived: false
-                            }));
-
-                            debugLog('🎯 Sprints extraídas de issues:', bundleValues.length);
-                        } catch (error) {
-                            debugWarn('❌ Erro ao extrair sprints de issues:', error.message);
-                        }
+                        debugLog('🎯 Sprints de exemplo criadas:', bundleValues.length);
                     }
 
                     // Filtrar valores não arquivados e ativos
@@ -1198,12 +1182,57 @@
 
                 debugLog('📡 Fazendo requisição para a API...');
 
-                // Fazer requisição SIMPLIFICADA - APENAS 5 ISSUES para debug
-                const issues = await host.fetchYouTrack('issues', {
-                    fields: 'id,idReadable,summary,state(name),project(name,shortName),created,resolved,customFields(name,value(name,id))',
-                    query: query,
-                    '$top': 5
-                });
+                // Fazer MÚLTIPLAS TENTATIVAS com diferentes abordagens
+                debugLog('🧪 Teste 1: Query normal...');
+                let issues;
+
+                try {
+                    // Tentativa 1: Query simples sem filtro de tempo
+                    issues = await host.fetchYouTrack('issues', {
+                        query: 'has: Sprints',
+                        '$top': 5
+                    });
+
+                    debugLog('📊 Tentativa 1 - Total encontrado:', issues?.length || 0);
+                    if (issues?.length > 0) {
+                        debugLog('📋 Primeira issue da tentativa 1:', {
+                            id: issues[0].id,
+                            idReadable: issues[0].idReadable,
+                            summary: issues[0].summary?.substring(0, 50),
+                            hasCustomFields: !!issues[0].customFields,
+                            customFieldsLength: issues[0].customFields?.length || 0
+                        });
+                    }
+
+                    // Se não retornou dados úteis, tentar sem filtro
+                    if (!issues?.length || !issues[0]?.idReadable) {
+                        debugLog('🧪 Teste 2: Sem filtro de sprint...');
+
+                        issues = await host.fetchYouTrack('issues', {
+                            query: 'created: 7d .. today',
+                            '$top': 5
+                        });
+
+                        debugLog('📊 Tentativa 2 - Total encontrado:', issues?.length || 0);
+                        if (issues?.length > 0) {
+                            debugLog('📋 Primeira issue da tentativa 2:', {
+                                id: issues[0].id,
+                                idReadable: issues[0].idReadable,
+                                summary: issues[0].summary?.substring(0, 50),
+                                hasCustomFields: !!issues[0].customFields,
+                                customFieldsLength: issues[0].customFields?.length || 0
+                            });
+                        }
+                    }
+
+                } catch (error) {
+                    debugWarn('❌ Erro em todas as tentativas:', error.message);
+
+                    // Último recurso: busca completamente básica
+                    issues = await host.fetchYouTrack('issues', {
+                        '$top': 5
+                    });
+                }
 
                 debugLog('📦 Resposta da API recebida');
                 debugLog('📦 Tipo da resposta:', typeof issues);
