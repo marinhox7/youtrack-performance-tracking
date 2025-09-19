@@ -682,44 +682,41 @@
             }
         }
 
-        // Calcular KPIs
+        // Calcular KPIs baseados nos estados das issues
         function calculateKPIs() {
             const issues = dashboardData.issues;
             const totalIssues = issues.length;
-            const resolvedIssues = issues.filter(issue => issue.resolved).length;
-            const pendingIssues = totalIssues - resolvedIssues;
-            const resolutionRate = totalIssues > 0 ? (resolvedIssues / totalIssues * 100).toFixed(1) : 0;
 
-            // Calcular tempo médio de resolução
-            const resolvedWithTime = issues.filter(issue => issue.resolved && issue.created);
-            let avgResolutionTime = 0;
-
-            if (resolvedWithTime.length > 0) {
-                const totalTime = resolvedWithTime.reduce((sum, issue) => {
-                    return sum + (issue.resolved - issue.created);
-                }, 0);
-                const avgMs = totalTime / resolvedWithTime.length;
-                avgResolutionTime = Math.round(avgMs / (1000 * 60 * 60 * 24));
-            }
-
-            // Calcular issues críticas (prioridade alta/crítica)
-            const criticalIssues = issues.filter(issue => {
-                const priority = issue.priority?.name?.toLowerCase() || '';
-                return priority.includes('crítica') || priority.includes('critical') ||
-                       priority.includes('alta') || priority.includes('high');
+            // Detectar issues resolvidas baseadas no estado
+            const resolvedIssues = issues.filter(issue => {
+                const stateName = (issue.state?.name || '').toLowerCase();
+                return stateName.includes('resolvido') ||
+                       stateName.includes('resolved') ||
+                       stateName.includes('fechado') ||
+                       stateName.includes('closed') ||
+                       stateName.includes('concluído') ||
+                       stateName.includes('completed') ||
+                       stateName.includes('done');
             }).length;
 
-            // Contar projetos únicos
-            const uniqueProjects = new Set(issues.map(issue => issue.project?.name).filter(Boolean)).size;
+            // Issues ativas = Total - Resolvidas
+            const activeIssues = totalIssues - resolvedIssues;
+
+            // Taxa de conclusão (resolução)
+            const completionRate = totalIssues > 0 ? (resolvedIssues / totalIssues * 100).toFixed(1) : 0;
+
+            console.log('📊 KPIs calculados:', {
+                total: totalIssues,
+                resolved: resolvedIssues,
+                active: activeIssues,
+                completionRate: completionRate + '%'
+            });
 
             dashboardData.kpis = {
                 total: totalIssues,
                 resolved: resolvedIssues,
-                pending: pendingIssues,
-                critical: criticalIssues,
-                projects: uniqueProjects,
-                resolutionRate: resolutionRate,
-                avgResolutionTime: avgResolutionTime
+                active: activeIssues,
+                completionRate: completionRate
             };
         }
 
@@ -786,42 +783,37 @@
             renderCharts();
         }
 
-        // Renderizar KPIs
+        // Renderizar KPIs - 4 cards horizontais específicos
         function renderKPIs() {
             const kpis = dashboardData.kpis;
 
-            // Determinar classe do card crítico
-            const criticalClass = kpis.critical > 5 ? 'critical' : kpis.critical > 2 ? 'warning' : 'success';
+            // Determinar classe do card de taxa de conclusão
+            const completionClass = kpis.completionRate >= 80 ? 'success' :
+                                   kpis.completionRate >= 60 ? 'warning' : 'critical';
 
             const metricsHtml = `
                 <div class="metric-card">
                     <span class="metric-icon">📊</span>
                     <div class="metric-value">${kpis.total}</div>
-                    <div class="metric-label">Total Issues</div>
+                    <div class="metric-label">Total de Issues</div>
                 </div>
 
                 <div class="metric-card success">
                     <span class="metric-icon">✅</span>
                     <div class="metric-value">${kpis.resolved}</div>
-                    <div class="metric-label">Resolvidas</div>
+                    <div class="metric-label">Issues Resolvidas</div>
                 </div>
 
                 <div class="metric-card warning">
-                    <span class="metric-icon">⏳</span>
-                    <div class="metric-value">${kpis.pending}</div>
-                    <div class="metric-label">Pendentes</div>
+                    <span class="metric-icon">🔄</span>
+                    <div class="metric-value">${kpis.active}</div>
+                    <div class="metric-label">Issues Ativas</div>
                 </div>
 
-                <div class="metric-card ${criticalClass}">
-                    <span class="metric-icon">🚨</span>
-                    <div class="metric-value">${kpis.critical}</div>
-                    <div class="metric-label">Críticas</div>
-                </div>
-
-                <div class="metric-card">
-                    <span class="metric-icon">📁</span>
-                    <div class="metric-value">${kpis.projects}</div>
-                    <div class="metric-label">Projetos</div>
+                <div class="metric-card ${completionClass}">
+                    <span class="metric-icon">📈</span>
+                    <div class="metric-value">${kpis.completionRate}%</div>
+                    <div class="metric-label">Taxa de Conclusão</div>
                 </div>
             `;
 
