@@ -1,35 +1,30 @@
 <!DOCTYPE html>
 <!--
-    Performance Dashboard Suite Widget
+    iMarinho Performance Dashboard Suite Widget - Versão Moderna
     Developed by: iMarinho Team
     Description: YouTrack performance metrics dashboard with 4 main KPI cards
+    Architecture: YTApp.register() - YouTrack 2024.1+
 -->
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Performance Dashboard Suite</title>
+    <title>iMarinho Performance Dashboard Suite</title>
     <style>
         * {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
 
-        body, html {
-            margin: 0;
-            padding: 0;
+        body {
             background: #ffffff;
             color: #333333;
             font-size: 13px;
             line-height: 1.4;
-        }
-
-        .dashboard-container {
             padding: 16px;
-            max-width: 100%;
-            overflow-x: auto;
+            min-height: 100vh;
         }
 
         .dashboard-header {
@@ -46,6 +41,9 @@
             font-weight: 600;
             color: #333;
             margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .refresh-button {
@@ -57,9 +55,12 @@
             font-size: 12px;
             cursor: pointer;
             transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
 
-        .refresh-button:hover {
+        .refresh-button:hover:not(:disabled) {
             background: #0052a3;
         }
 
@@ -68,20 +69,32 @@
             cursor: not-allowed;
         }
 
-        .loading {
-            text-align: center;
-            padding: 40px 20px;
-            color: #666;
+        .status-message {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
-        .error {
-            background: #fff2f2;
-            border: 1px solid #ffc6c6;
-            color: #cc0000;
-            padding: 12px;
-            border-radius: 4px;
-            margin-bottom: 16px;
-            font-size: 12px;
+        .status-message.warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+
+        .status-message.success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .status-message.error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
         }
 
         .metrics-grid {
@@ -92,656 +105,589 @@
         }
 
         .metric-card {
-            background: #f8f9fa;
-            border: 1px solid #e5e5e5;
-            border-radius: 6px;
-            padding: 16px;
+            background: #ffffff;
+            border: 1px solid #e1e5e9;
+            border-radius: 12px;
+            padding: 24px;
             text-align: center;
-            transition: box-shadow 0.2s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
         }
 
         .metric-card:hover {
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
         }
 
-        .metric-card-success {
-            border-left: 4px solid #28a745;
+        .metric-card.total {
+            border-left: 4px solid #3B82F6;
+            background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%);
+        }
+        .metric-card.resolved {
+            border-left: 4px solid #10B981;
+            background: linear-gradient(135deg, #ffffff 0%, #f0fdf7 100%);
+        }
+        .metric-card.active {
+            border-left: 4px solid #F59E0B;
+            background: linear-gradient(135deg, #ffffff 0%, #fffbf0 100%);
+        }
+        .metric-card.completion {
+            border-left: 4px solid #8B5CF6;
+            background: linear-gradient(135deg, #ffffff 0%, #f7f3ff 100%);
+        }
+        .metric-card.projects {
+            border-left: 4px solid #6B7280;
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
         }
 
-        .metric-card-success .metric-value {
-            color: #28a745;
-        }
-
-        .metric-card-warning {
-            border-left: 4px solid #ffc107;
-        }
-
-        .metric-card-warning .metric-value {
-            color: #e67e22;
-        }
-
-        .metric-card-critical {
-            border-left: 4px solid #dc3545;
-        }
-
-        .metric-card-critical .metric-value {
-            color: #dc3545;
+        .metric-icon {
+            font-size: 32px;
+            margin-bottom: 12px;
+            display: block;
+            line-height: 1;
         }
 
         .metric-value {
-            font-size: 24px;
+            font-size: 36px;
             font-weight: 700;
-            color: #333;
-            margin-bottom: 4px;
+            margin-bottom: 8px;
+            display: block;
+            line-height: 1;
         }
 
+        .metric-card.total .metric-value { color: #3B82F6; }
+        .metric-card.resolved .metric-value { color: #10B981; }
+        .metric-card.active .metric-value { color: #F59E0B; }
+        .metric-card.completion .metric-value { color: #8B5CF6; }
+        .metric-card.projects .metric-value { color: #6B7280; }
+
         .metric-label {
-            font-size: 11px;
-            color: #666;
+            font-size: 12px;
+            color: #6B7280;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            font-weight: 500;
+            font-weight: 600;
+            letter-spacing: 0.8px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #0066cc;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
         .hidden {
             display: none;
         }
+
+        .details-section {
+            margin-top: 24px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            border: 1px solid #e9ecef;
+        }
+
+        .details-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: #495057;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .details-list {
+            font-size: 12px;
+            line-height: 1.8;
+            color: #6c757d;
+        }
+
+        .details-list > div {
+            margin-bottom: 8px;
+        }
+
+        .details-list strong {
+            color: #495057;
+            font-weight: 600;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .metric-change {
+            font-size: 10px;
+            margin-top: 4px;
+            padding: 2px 6px;
+            border-radius: 12px;
+            display: inline-block;
+        }
+
+        .metric-change.positive {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .metric-change.negative {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .imarinho-badge {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            font-size: 10px;
+            color: #6B7280;
+            font-weight: 500;
+        }
     </style>
 </head>
 <body>
-    <div class="dashboard-container">
-        <div class="dashboard-header">
-            <h1 class="dashboard-title">Performance Dashboard</h1>
-            <button class="refresh-button" id="refreshBtn" onclick="loadData()">
-                Atualizar
-            </button>
+    <div class="dashboard-header">
+        <h1 class="dashboard-title">
+            📊 iMarinho Performance Dashboard
+        </h1>
+        <button class="refresh-button" id="refreshBtn" onclick="carregarDados()">
+            🔄 <span id="refreshText">Atualizar</span>
+        </button>
+    </div>
+
+    <div id="statusMessage" class="status-message hidden"></div>
+
+    <div id="loading" class="loading">
+        <div class="loading-spinner"></div>
+        <div>Carregando métricas do YouTrack...</div>
+    </div>
+
+    <div id="content" class="hidden">
+        <div class="metrics-grid" id="metricsGrid">
+            <!-- Cards de métricas serão inseridos aqui -->
         </div>
 
-        <div id="loading" class="loading">
-            Carregando dados...
-        </div>
-
-        <div id="error" class="error hidden">
-            <!-- Mensagens de erro aparecerão aqui -->
-        </div>
-
-        <div id="content" class="hidden">
-            <div class="metrics-grid" id="metricsGrid">
-                <!-- Cards de métricas aparecerão aqui -->
+        <div class="details-section">
+            <div class="details-title">
+                📋 Detalhes dos Cálculos iMarinho
+            </div>
+            <div id="detailsList" class="details-list">
+                <!-- Detalhes serão inseridos aqui -->
             </div>
         </div>
     </div>
 
-    <script>
-        console.log('🚀 Performance Dashboard inicializando...');
+    <script type="module">
+        console.log('🚀 iMarinho Performance Dashboard Moderno inicializando...');
 
-        // Estado global do dashboard
+        // Variáveis globais
+        let host;
         let dashboardData = {
             issues: [],
-            metrics: {}
+            metrics: {},
+            detalhes: {}
         };
 
-        // Função para mostrar loading
-        function showLoading(show = true) {
-            const loading = document.getElementById('loading');
-            const content = document.getElementById('content');
-            const refreshBtn = document.getElementById('refreshBtn');
+        // Estados do YouTrack (MAIÚSCULAS) - Configuração iMarinho
+        const ESTADOS_RESOLVIDOS = ['DONE', 'CLOSED', 'PRODUCTION'];
+        const ESTADOS_IGNORADOS = ['BACKLOG', 'MOVED TO NEXT SPRINT'];
+        const ESTADOS_ATIVOS = ['IN DEVELOPMENT', 'CORRECTION', 'READY TO REVIEW', 'REVIEWING', 'APPROVED'];
 
-            if (show) {
-                loading.classList.remove('hidden');
-                content.classList.add('hidden');
-                refreshBtn.disabled = true;
-                refreshBtn.textContent = 'Carregando...';
-            } else {
-                loading.classList.add('hidden');
-                content.classList.remove('hidden');
-                refreshBtn.disabled = false;
-                refreshBtn.textContent = 'Atualizar';
+        // Inicialização do widget
+        async function inicializarWidget() {
+            try {
+                console.log('🔌 Registrando widget iMarinho com YTApp...');
+
+                // Registrar com a API moderna do YouTrack
+                host = await YTApp.register({
+                    onUnhandledError: (error) => {
+                        console.error('❌ Erro não tratado no widget:', error);
+                        mostrarMensagem(`Erro no widget: ${error.message}`, 'error');
+                    }
+                });
+
+                console.log('✅ Widget iMarinho registrado com sucesso');
+
+                // Configurar título do widget
+                host.setTitle('📊 iMarinho Performance Dashboard');
+
+                // Configurar altura inicial (se disponível)
+                if (host.resize) {
+                    host.resize(800, 500);
+                }
+
+                // Carregar dados iniciais
+                await carregarDados();
+
+                // Configurar atualização automática a cada 5 minutos
+                setInterval(carregarDados, 5 * 60 * 1000);
+
+                console.log('🎯 Widget iMarinho totalmente inicializado');
+
+            } catch (error) {
+                console.error('❌ Erro ao inicializar widget iMarinho:', error);
+                mostrarMensagem(`Erro ao inicializar widget: ${error.message}`, 'error');
+
+                // Fallback para dados de exemplo
+                console.log('🔄 Iniciando com dados de exemplo...');
+                gerarDadosExemplo();
+                calcularMetricas();
+                renderizarDashboard();
             }
-        }
-
-        // Função para mostrar erro
-        function showError(message, type = 'error') {
-            const errorDiv = document.getElementById('error');
-
-            // Limpar classes existentes
-            errorDiv.className = 'error';
-
-            // Adicionar classe baseada no tipo
-            if (type === 'warning') {
-                errorDiv.style.background = '#fff8e1';
-                errorDiv.style.borderColor = '#ffcc02';
-                errorDiv.style.color = '#f57c00';
-            } else {
-                errorDiv.style.background = '#fff2f2';
-                errorDiv.style.borderColor = '#ffc6c6';
-                errorDiv.style.color = '#cc0000';
-            }
-
-            errorDiv.textContent = message;
-            if (message) {
-                errorDiv.classList.remove('hidden');
-            } else {
-                errorDiv.classList.add('hidden');
-            }
-        }
-
-        // Função para esconder erro
-        function hideError() {
-            document.getElementById('error').classList.add('hidden');
         }
 
         // Função principal para carregar dados
-        async function loadDashboardData() {
-            console.log('📡 Carregando dados do dashboard...');
+        async function carregarDados() {
+            console.log('📡 Carregando dados do YouTrack...');
 
             try {
-                showLoading(true);
-                showError('');
+                mostrarLoading(true);
 
-                // Tentar buscar dados reais primeiro
-                try {
-                    const issues = await fetchYouTrackIssues();
+                if (host) {
+                    host.setLoadingAnimationEnabled(true);
+                    host.clearError();
+                }
+
+                // Buscar todas as issues (últimos 30 dias)
+                const dataInicio = new Date();
+                dataInicio.setDate(dataInicio.getDate() - 30);
+
+                console.log('🔍 Buscando issues dos últimos 30 dias...');
+
+                // Formatar datas para o formato do YouTrack (YYYY-MM-DD)
+                const dataInicioFormatada = dataInicio.toISOString().split('T')[0];
+                const dataAtualFormatada = new Date().toISOString().split('T')[0];
+
+                if (host && host.fetchYouTrack) {
+                    const issues = await host.fetchYouTrack(
+                        `api/issues?fields=id,idReadable,summary,state(name),project(name,shortName),created,resolved,assignee(name,fullName)&query=created: ${dataInicioFormatada} .. ${dataAtualFormatada}&$top=1000`
+                    );
+
+                    console.log(`📊 Issues encontradas: ${issues.length}`);
                     dashboardData.issues = issues;
-                    console.log('✅ Dados reais carregados:', issues.length, 'issues');
-                } catch (apiError) {
-                    console.log('⚠️ API não disponível, usando dados de exemplo:', apiError.message);
 
-                    // Usar dados de exemplo mais realistas
-                    dashboardData.issues = generateRealisticExampleData();
+                    // Calcular métricas
+                    calcularMetricas();
 
-                    // Mostrar aviso mais informativo
-                    if (window.location.href.includes('about:') || window.location.href.includes('srcdoc')) {
-                        showError('💡 Widget rodando em modo de demonstração - usando dados de exemplo da iMarinho', 'warning');
-                    } else {
-                        showError('⚠️ API YouTrack não acessível - exibindo dados de exemplo', 'warning');
-                    }
+                    // Renderizar dashboard
+                    renderizarDashboard();
+
+                    mostrarMensagem(`✅ Dados iMarinho atualizados! ${issues.length} issues processadas`, 'success');
+
+                } else {
+                    throw new Error('API do YouTrack não disponível');
                 }
 
-                calculateMetrics();
-                renderDashboard();
-
             } catch (error) {
-                console.error('❌ Erro crítico ao carregar dashboard:', error);
-                showError('❌ Erro ao carregar dados: ' + error.message, 'error');
+                console.error('❌ Erro ao carregar dados:', error);
+
+                if (host) {
+                    host.setError(`Erro ao carregar dados: ${error.message}`);
+                }
+
+                mostrarMensagem(`⚠️ API indisponível - exibindo dados de exemplo iMarinho`, 'warning');
+
+                // Usar dados de exemplo como fallback
+                gerarDadosExemplo();
+                calcularMetricas();
+                renderizarDashboard();
+
             } finally {
-                showLoading(false);
+                mostrarLoading(false);
+
+                if (host) {
+                    host.setLoadingAnimationEnabled(false);
+                }
             }
         }
 
-        // Wrapper para compatibilidade
-        async function loadData() {
-            await loadDashboardData();
-        }
+        // Calcular métricas com lógica correta
+        function calcularMetricas() {
+            console.log('🔢 Calculando métricas iMarinho...');
 
-        // Função para detectar URL base do YouTrack
-        function detectYouTrackBaseUrl() {
-            try {
-                // Prioridade 1: Tentar acessar contexto do widget YT
-                if (typeof YT !== 'undefined' && YT.host) {
-                    console.log('✅ Contexto YT disponível, usando URLs relativas');
-                    return '';  // Use URLs relativas quando YT está disponível
-                }
+            const issues = dashboardData.issues;
 
-                // Prioridade 2: Verificar se há contexto de widget mesmo sem YT global
-                if (window.parent && window.parent !== window) {
-                    try {
-                        // Widget rodando em iframe - tentar acessar parent
-                        const parentHref = window.parent.location.href;
-                        if (parentHref && !parentHref.startsWith('about:') && parentHref.includes('youtrack')) {
-                            const url = new URL(parentHref);
-                            const baseUrl = `${url.protocol}//${url.host}`;
-                            console.log('🌐 URL base do parent iframe:', baseUrl);
-                            return baseUrl;
-                        }
-                    } catch (e) {
-                        console.log('⚠️ Parent window inacessível (CORS/sandbox)');
-                    }
-                }
-
-                // Prioridade 3: Verificar URL atual (não é about: ou srcdoc)
-                if (window.location.href &&
-                    !window.location.href.startsWith('about:') &&
-                    !window.location.href.includes('srcdoc')) {
-                    const url = new URL(window.location.href);
-                    const baseUrl = `${url.protocol}//${url.host}`;
-                    console.log('🌐 URL base da página atual:', baseUrl);
-                    return baseUrl;
-                }
-
-                // Prioridade 4: Verificar se estamos em contexto YouTrack via DOM
-                try {
-                    if (window.parent && window.parent.document) {
-                        const parentTitle = window.parent.document.title;
-                        if (parentTitle && parentTitle.includes('YouTrack')) {
-                            console.log('🌐 Detectado contexto YouTrack pelo título');
-                            return 'https://braiphub.youtrack.cloud'; // Usar fallback seguro
-                        }
-                    }
-                } catch (e) {
-                    // Ignorar erro de acesso cross-origin
-                }
-
-                // Fallback final: usar configuração conhecida
-                console.log('⚠️ Usando URL hardcoded como fallback final');
-                return 'https://braiphub.youtrack.cloud';
-
-            } catch (error) {
-                console.error('❌ Erro ao detectar URL base:', error);
-                return 'https://braiphub.youtrack.cloud';
-            }
-        }
-
-        // Função corrigida para usar API do YouTrack em widget
-        async function fetchWithAuth(url) {
-            console.log('🔍 Fazendo requisição para:', url);
-
-            try {
-                // Estratégia 1: Tentar acessar YT global via diferentes caminhos
-                let YTObject = null;
-
-                // Tentar YT direto
-                if (typeof YT !== 'undefined') {
-                    YTObject = YT;
-                    console.log('✅ YT encontrado globalmente');
-                }
-
-                // Tentar via window
-                else if (typeof window.YT !== 'undefined') {
-                    YTObject = window.YT;
-                    console.log('✅ YT encontrado via window.YT');
-                }
-
-                // Tentar via parent window
-                else if (window.parent && typeof window.parent.YT !== 'undefined') {
-                    YTObject = window.parent.YT;
-                    console.log('✅ YT encontrado via window.parent.YT');
-                }
-
-                // Tentar via top window
-                else if (window.top && typeof window.top.YT !== 'undefined') {
-                    YTObject = window.top.YT;
-                    console.log('✅ YT encontrado via window.top.YT');
-                }
-
-                // Se encontrou YT, tentar usar
-                if (YTObject && YTObject.fetch) {
-                    console.log('✅ Usando YT.fetch (API nativa do widget)');
-                    const relativeUrl = url.replace(/^https?:\/\/[^\/]+/, '');
-                    console.log('📍 URL relativa para YT.fetch:', relativeUrl);
-
-                    const response = await YTObject.fetch(relativeUrl);
-
-                    if (!response.ok) {
-                        throw new Error(`YT.fetch HTTP ${response.status}: ${response.statusText}`);
-                    }
-
-                    const data = await response.json();
-                    console.log('✅ Dados recebidos via YT.fetch:', data.length, 'issues');
-                    return data;
-                }
-
-                // Estratégia 2: Tentar via postMessage para parent
-                if (window.parent && window.parent !== window) {
-                    console.log('🔄 Tentando comunicação via postMessage com parent');
-
-                    return new Promise((resolve, reject) => {
-                        const timeout = setTimeout(() => {
-                            reject(new Error('Timeout na comunicação com parent window'));
-                        }, 10000);
-
-                        const messageHandler = (event) => {
-                            if (event.data && event.data.type === 'YOUTRACK_API_RESPONSE') {
-                                clearTimeout(timeout);
-                                window.removeEventListener('message', messageHandler);
-
-                                if (event.data.success) {
-                                    console.log('✅ Dados recebidos via postMessage:', event.data.data.length, 'issues');
-                                    resolve(event.data.data);
-                                } else {
-                                    reject(new Error(event.data.error));
-                                }
-                            }
-                        };
-
-                        window.addEventListener('message', messageHandler);
-
-                        const relativeUrl = url.replace(/^https?:\/\/[^\/]+/, '');
-                        window.parent.postMessage({
-                            type: 'YOUTRACK_API_REQUEST',
-                            url: relativeUrl
-                        }, '*');
-                    });
-                }
-
-                // Estratégia 3: fetch normal com URL relativa (última tentativa)
-                console.log('🔄 Tentando fetch padrão com URL relativa');
-                const relativeUrl = url.replace(/^https?:\/\/[^\/]+/, '');
-                console.log('📍 URL relativa para fetch:', relativeUrl);
-
-                const response = await fetch(relativeUrl, {
-                    credentials: 'same-origin',
-                    headers: {
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                if (!response.ok) {
-                    throw new Error(`Fetch HTTP ${response.status}: ${response.statusText}`);
-                }
-
-                const data = await response.json();
-                console.log('✅ Dados recebidos via fetch padrão:', data.length, 'issues');
-                return data;
-
-            } catch (error) {
-                console.error('💥 Erro na requisição:', error.message);
-
-                // Log detalhado para debug
-                console.log('🔧 Contexto de debug:', {
-                    'URL original': url,
-                    'YT global': typeof YT !== 'undefined',
-                    'window.YT': typeof window.YT !== 'undefined',
-                    'parent.YT': window.parent && typeof window.parent.YT !== 'undefined',
-                    'top.YT': window.top && typeof window.top.YT !== 'undefined',
-                    'window.location': window.location.href,
-                    'É iframe': window.parent !== window,
-                    'Parent acessível': window.parent !== window && window.parent
-                });
-
-                throw error;
-            }
-        }
-
-        // Função para aguardar carregamento do YT
-        function waitForYT(timeout = 5000) {
-            return new Promise((resolve) => {
-                let attempts = 0;
-                const maxAttempts = timeout / 100;
-
-                const checkYT = () => {
-                    attempts++;
-
-                    // Verificar diferentes caminhos para YT
-                    if (typeof YT !== 'undefined' && YT.fetch) {
-                        console.log('✅ YT carregado após', attempts * 100, 'ms');
-                        resolve(YT);
-                        return;
-                    }
-
-                    if (typeof window.YT !== 'undefined' && window.YT.fetch) {
-                        console.log('✅ window.YT carregado após', attempts * 100, 'ms');
-                        resolve(window.YT);
-                        return;
-                    }
-
-                    if (window.parent && typeof window.parent.YT !== 'undefined' && window.parent.YT.fetch) {
-                        console.log('✅ parent.YT carregado após', attempts * 100, 'ms');
-                        resolve(window.parent.YT);
-                        return;
-                    }
-
-                    if (window.top && typeof window.top.YT !== 'undefined' && window.top.YT.fetch) {
-                        console.log('✅ top.YT carregado após', attempts * 100, 'ms');
-                        resolve(window.top.YT);
-                        return;
-                    }
-
-                    if (attempts < maxAttempts) {
-                        setTimeout(checkYT, 100);
-                    } else {
-                        console.log('⏰ Timeout aguardando YT após', timeout, 'ms');
-                        resolve(null);
-                    }
-                };
-
-                checkYT();
+            // Filtrar issues válidas (excluir BACKLOG e MOVED TO NEXT SPRINT)
+            const issuesValidas = issues.filter(issue => {
+                const estado = (issue.state?.name || '').toUpperCase().trim();
+                return !ESTADOS_IGNORADOS.includes(estado);
             });
+
+            const total = issuesValidas.length;
+
+            // Contar issues resolvidas
+            const resolvidas = issuesValidas.filter(issue => {
+                const estado = (issue.state?.name || '').toUpperCase().trim();
+                return ESTADOS_RESOLVIDOS.includes(estado);
+            }).length;
+
+            // Contar issues ativas
+            const ativas = issuesValidas.filter(issue => {
+                const estado = (issue.state?.name || '').toUpperCase().trim();
+                return ESTADOS_ATIVOS.includes(estado);
+            }).length;
+
+            // Outras issues (nem resolvidas nem ativas, mas válidas)
+            const outras = total - resolvidas - ativas;
+
+            // Taxa de conclusão
+            const taxaConclusao = total > 0 ? Math.round((resolvidas / total) * 100) : 0;
+
+            // Contar projetos únicos
+            const projetosUnicos = new Set(
+                issuesValidas.map(issue => issue.project?.name).filter(Boolean)
+            ).size;
+
+            dashboardData.metrics = {
+                total,
+                resolvidas,
+                ativas,
+                outras,
+                taxaConclusao,
+                projetos: projetosUnicos
+            };
+
+            dashboardData.detalhes = {
+                totalIssues: issues.length,
+                issuesIgnoradas: issues.length - total,
+                estadosResolvidos: ESTADOS_RESOLVIDOS,
+                estadosAtivos: ESTADOS_ATIVOS,
+                estadosIgnorados: ESTADOS_IGNORADOS,
+                distribuicaoEstados: calcularDistribuicaoEstados(issuesValidas),
+                teamIssues: calcularIssuesPorTeam(issuesValidas)
+            };
+
+            console.log('📊 Métricas iMarinho calculadas:', dashboardData.metrics);
         }
 
-        // Função para buscar issues reais do YouTrack
-        async function fetchYouTrackIssues() {
-            console.log('🔍 Buscando dados reais do YouTrack...');
+        // Calcular distribuição por estados
+        function calcularDistribuicaoEstados(issues) {
+            const distribuicao = {};
+            issues.forEach(issue => {
+                const estado = issue.state?.name || 'SEM ESTADO';
+                distribuicao[estado] = (distribuicao[estado] || 0) + 1;
+            });
+            return distribuicao;
+        }
 
-            // Tentar aguardar carregamento do YT primeiro
-            console.log('⏳ Aguardando carregamento do YT...');
-            const YTObject = await waitForYT(3000);
+        // Calcular issues por team iMarinho
+        function calcularIssuesPorTeam(issues) {
+            const teamStats = {};
+            issues.forEach(issue => {
+                const assignee = issue.assignee?.fullName || issue.assignee?.name || 'Não Atribuído';
+                teamStats[assignee] = (teamStats[assignee] || 0) + 1;
+            });
+            return teamStats;
+        }
 
-            if (YTObject) {
-                console.log('✅ YT carregado, usando API nativa');
-                const query = 'created: -30d .. now';
-                const fields = 'id,idReadable,created,resolved,state(name),priority(name),project(name,shortName),assignee(name,fullName)';
-                const relativeUrl = `/api/issues?fields=${fields}&query=${encodeURIComponent(query)}&$top=1000`;
+        // Renderizar dashboard
+        function renderizarDashboard() {
+            console.log('🎨 Renderizando dashboard iMarinho...');
 
-                try {
-                    const response = await YTObject.fetch(relativeUrl);
-                    if (!response.ok) {
-                        throw new Error(`YT.fetch HTTP ${response.status}: ${response.statusText}`);
-                    }
-                    const data = await response.json();
-                    console.log('✅ Dados carregados via YT.fetch:', data.length, 'issues');
-                    return data;
-                } catch (error) {
-                    console.error('❌ Erro com YT.fetch:', error.message);
-                    // Continuar para fallback
-                }
+            const metrics = dashboardData.metrics;
+            const grid = document.getElementById('metricsGrid');
+
+            grid.innerHTML = `
+                <div class="metric-card total fade-in">
+                    <div class="imarinho-badge">iMarinho</div>
+                    <span class="metric-icon">📊</span>
+                    <span class="metric-value">${metrics.total}</span>
+                    <span class="metric-label">Total de Issues</span>
+                </div>
+                <div class="metric-card resolved fade-in">
+                    <div class="imarinho-badge">iMarinho</div>
+                    <span class="metric-icon">✅</span>
+                    <span class="metric-value">${metrics.resolvidas}</span>
+                    <span class="metric-label">Issues Resolvidas</span>
+                </div>
+                <div class="metric-card active fade-in">
+                    <div class="imarinho-badge">iMarinho</div>
+                    <span class="metric-icon">🚀</span>
+                    <span class="metric-value">${metrics.ativas}</span>
+                    <span class="metric-label">Issues Ativas</span>
+                </div>
+                <div class="metric-card completion fade-in">
+                    <div class="imarinho-badge">iMarinho</div>
+                    <span class="metric-icon">📈</span>
+                    <span class="metric-value">${metrics.taxaConclusao}%</span>
+                    <span class="metric-label">Taxa de Conclusão</span>
+                </div>
+                <div class="metric-card projects fade-in">
+                    <div class="imarinho-badge">iMarinho</div>
+                    <span class="metric-icon">📁</span>
+                    <span class="metric-value">${metrics.projetos}</span>
+                    <span class="metric-label">Projetos</span>
+                </div>
+            `;
+
+            // Renderizar detalhes
+            renderizarDetalhes();
+
+            // Mostrar conteúdo com animação
+            document.getElementById('content').classList.remove('hidden');
+
+            // Ajustar altura do widget se possível
+            if (host && host.resize) {
+                const contentHeight = document.body.scrollHeight + 20;
+                host.resize(800, Math.max(500, contentHeight));
             }
-
-            // Fallback para método anterior
-            const baseUrl = detectYouTrackBaseUrl();
-            const query = 'created: -30d .. now';
-            const fields = 'id,idReadable,created,resolved,state(name),priority(name),project(name,shortName),assignee(name,fullName)';
-
-            const url = `${baseUrl}/api/issues?fields=${fields}&query=${encodeURIComponent(query)}&$top=1000`;
-
-            return await fetchWithAuth(url);
         }
 
+        // Renderizar seção de detalhes
+        function renderizarDetalhes() {
+            const detalhes = dashboardData.detalhes;
+            const detailsList = document.getElementById('detailsList');
 
-        // Gerar dados de exemplo realistas
-        function generateRealisticExampleData() {
-            console.log('📝 Gerando dados de exemplo realistas...');
+            const distribuicaoTexto = Object.entries(detalhes.distribuicaoEstados)
+                .map(([estado, count]) => `${estado}: ${count}`)
+                .join(' | ');
 
-            const data = [];
+            const teamTexto = Object.entries(detalhes.teamIssues)
+                .slice(0, 5) // Top 5
+                .map(([name, count]) => `${name}: ${count}`)
+                .join(' | ');
 
-            // Estados reais em MAIÚSCULAS
-            const states = [
-                'DONE', 'CLOSED', 'PRODUCTION',           // Resolvidos
-                'IN DEVELOPMENT', 'CORRECTION', 'READY TO REVIEW', 'REVIEWING', 'APPROVED', // Ativos
-                'OPEN', 'PAUSED',                         // Outros estados
-                'BACKLOG', 'MOVED TO NEXT SPRINT'         // Ignorados
+            detailsList.innerHTML = `
+                <div><strong>📊 Total de issues encontradas:</strong> ${detalhes.totalIssues}</div>
+                <div><strong>🚫 Issues ignoradas no cálculo:</strong> ${detalhes.issuesIgnoradas} (${detalhes.estadosIgnorados.join(', ')})</div>
+                <div><strong>✅ Estados considerados resolvidos:</strong> ${detalhes.estadosResolvidos.join(', ')}</div>
+                <div><strong>🚀 Estados considerados ativos:</strong> ${detalhes.estadosAtivos.join(', ')}</div>
+                <div><strong>📈 Distribuição por estado:</strong> ${distribuicaoTexto}</div>
+                <div><strong>👥 Top 5 Team iMarinho:</strong> ${teamTexto}</div>
+                <div><strong>🕒 Última atualização:</strong> ${new Date().toLocaleString('pt-BR')}</div>
+                <div><strong>⚡ Powered by:</strong> iMarinho Performance Suite v2.0</div>
+            `;
+        }
+
+        // Gerar dados de exemplo para fallback
+        function gerarDadosExemplo() {
+            console.log('📝 Gerando dados de exemplo iMarinho...');
+
+            const estados = [
+                ...ESTADOS_RESOLVIDOS,
+                ...ESTADOS_ATIVOS,
+                'OPEN', 'PAUSED',
+                ...ESTADOS_IGNORADOS
             ];
 
-            const priorities = ['Low', 'Normal', 'High', 'Critical'];
-            const projects = [
-                { name: 'Performance Dashboard', shortName: 'PERF' },
-                { name: 'YouTrack Integration', shortName: 'YT' },
-                { name: 'Analytics Platform', shortName: 'ANAL' },
-                { name: 'Reporting Tools', shortName: 'REP' }
+            const projetos = [
+                { name: 'iMarinho Performance Dashboard', shortName: 'IPERF' },
+                { name: 'iMarinho YouTrack Integration', shortName: 'IYT' },
+                { name: 'iMarinho Analytics Platform', shortName: 'IANAL' },
+                { name: 'iMarinho Reporting Tools', shortName: 'IREP' }
             ];
 
-            // Gerar 50 issues de exemplo com distribuição realista
+            const teamIMarinho = [
+                { name: 'imarinho-dev1', fullName: 'iMarinho Dev Lead' },
+                { name: 'imarinho-dev2', fullName: 'iMarinho Senior Dev' },
+                { name: 'imarinho-dev3', fullName: 'iMarinho Full Stack' },
+                { name: 'imarinho-dev4', fullName: 'iMarinho Frontend' },
+                { name: 'imarinho-dev5', fullName: 'iMarinho Backend' }
+            ];
+
+            const dados = [];
             for (let i = 1; i <= 50; i++) {
-                const project = projects[Math.floor(Math.random() * projects.length)];
+                const projeto = projetos[Math.floor(Math.random() * projetos.length)];
+                const assignee = teamIMarinho[Math.floor(Math.random() * teamIMarinho.length)];
+                let estado;
 
-                // Distribuição mais realista dos estados
-                let state;
+                // Distribuição realista
                 const rand = Math.random();
                 if (rand < 0.3) {
-                    // 30% resolvidos
-                    state = ['DONE', 'CLOSED', 'PRODUCTION'][Math.floor(Math.random() * 3)];
-                } else if (rand < 0.7) {
-                    // 40% ativos
-                    state = ['IN DEVELOPMENT', 'CORRECTION', 'READY TO REVIEW', 'REVIEWING', 'APPROVED'][Math.floor(Math.random() * 5)];
-                } else if (rand < 0.85) {
-                    // 15% outros estados
-                    state = ['OPEN', 'PAUSED'][Math.floor(Math.random() * 2)];
+                    estado = ESTADOS_RESOLVIDOS[Math.floor(Math.random() * ESTADOS_RESOLVIDOS.length)];
+                } else if (rand < 0.6) {
+                    estado = ESTADOS_ATIVOS[Math.floor(Math.random() * ESTADOS_ATIVOS.length)];
+                } else if (rand < 0.8) {
+                    estado = ['OPEN', 'PAUSED'][Math.floor(Math.random() * 2)];
                 } else {
-                    // 15% ignorados
-                    state = ['BACKLOG', 'MOVED TO NEXT SPRINT'][Math.floor(Math.random() * 2)];
+                    estado = ESTADOS_IGNORADOS[Math.floor(Math.random() * ESTADOS_IGNORADOS.length)];
                 }
 
-                const priority = priorities[Math.floor(Math.random() * priorities.length)];
-
-                data.push({
+                dados.push({
                     id: i.toString(),
-                    idReadable: `${project.shortName}-${i}`,
-                    state: { name: state },
-                    priority: { name: priority },
-                    project: project,
-                    assignee: {
-                        name: `imarinho${i % 5}`,
-                        fullName: `iMarinho Dev ${i % 5}`
-                    },
+                    idReadable: `${projeto.shortName}-${i}`,
+                    summary: `Issue iMarinho de exemplo ${i}`,
+                    state: { name: estado },
+                    project: projeto,
+                    assignee: assignee,
                     created: Date.now() - (Math.random() * 30 * 24 * 60 * 60 * 1000),
-                    resolved: ['DONE', 'CLOSED', 'PRODUCTION'].includes(state)
+                    resolved: ESTADOS_RESOLVIDOS.includes(estado)
                         ? Date.now() - (Math.random() * 15 * 24 * 60 * 60 * 1000)
                         : null
                 });
             }
 
-            console.log('📊 Dados de exemplo gerados:', {
-                total: data.length,
-                porEstado: data.reduce((acc, issue) => {
-                    acc[issue.state.name] = (acc[issue.state.name] || 0) + 1;
-                    return acc;
-                }, {})
-            });
-
-            return data;
+            dashboardData.issues = dados;
+            console.log('📊 Dados de exemplo iMarinho gerados:', dados.length, 'issues');
         }
 
-        // Gerar dados de exemplo (compatibilidade)
-        function generateExampleData() {
-            return generateRealisticExampleData();
+        // Funções de UI
+        function mostrarLoading(show = true) {
+            const loading = document.getElementById('loading');
+            const content = document.getElementById('content');
+            const refreshBtn = document.getElementById('refreshBtn');
+            const refreshText = document.getElementById('refreshText');
+
+            if (show) {
+                loading.classList.remove('hidden');
+                content.classList.add('hidden');
+                refreshBtn.disabled = true;
+                refreshText.textContent = 'Carregando...';
+            } else {
+                loading.classList.add('hidden');
+                content.classList.remove('hidden');
+                refreshBtn.disabled = false;
+                refreshText.textContent = 'Atualizar';
+            }
         }
 
-        // Calcular métricas
-        function calculateMetrics() {
-            console.log('🔢 Calculando métricas...');
+        function mostrarMensagem(texto, tipo = 'success') {
+            const statusMessage = document.getElementById('statusMessage');
 
-            const issues = dashboardData.issues;
-
-            // Estados que devem ser IGNORADOS do cálculo (em maiúsculas)
-            const excludedStates = [
-                'BACKLOG',
-                'MOVED TO NEXT SPRINT'
-            ];
-
-            // Estados considerados como RESOLVIDOS (em maiúsculas)
-            const resolvedStates = [
-                'DONE',
-                'CLOSED',
-                'PRODUCTION'
-            ];
-
-            // Estados considerados como ATIVOS (em maiúsculas)
-            const activeStates = [
-                'IN DEVELOPMENT',
-                'CORRECTION',
-                'READY TO REVIEW',
-                'REVIEWING',
-                'APPROVED'
-            ];
-
-            // Filtrar issues excluídas (ignorar BACKLOG e MOVED TO NEXT SPRINT)
-            const validIssues = issues.filter(issue => {
-                const state = (issue.state?.name || '').toUpperCase().trim();
-                return !excludedStates.includes(state);
-            });
-
-            const total = validIssues.length;
-
-            // Contar issues resolvidas (DONE, CLOSED, PRODUCTION)
-            const resolved = validIssues.filter(issue => {
-                const state = (issue.state?.name || '').toUpperCase().trim();
-                return resolvedStates.includes(state);
-            }).length;
-
-            // Contar issues ativas (IN DEVELOPMENT, CORRECTION, READY TO REVIEW, REVIEWING, APPROVED)
-            const active = validIssues.filter(issue => {
-                const state = (issue.state?.name || '').toUpperCase().trim();
-                return activeStates.includes(state);
-            }).length;
-
-            // Taxa de conclusão: (Resolvidas ÷ Total válidas) × 100
-            const completionRate = total > 0 ? Math.round((resolved / total) * 100) : 0;
-
-            // Contar projetos únicos (apenas issues válidas)
-            const uniqueProjects = new Set(
-                validIssues
-                    .map(issue => issue.project?.name)
-                    .filter(Boolean)
-            ).size;
-
-            dashboardData.metrics = {
-                total,
-                resolved,
-                active,
-                completionRate,
-                projects: uniqueProjects
+            const icones = {
+                success: '✅',
+                warning: '⚠️',
+                error: '❌'
             };
 
-            console.log('📊 Métricas calculadas:', {
-                'Total de Issues (válidas)': total,
-                'Issues Resolvidas': resolved,
-                'Issues Ativas': active,
-                'Estados resolvidos': resolvedStates.join(', '),
-                'Estados ativos': activeStates.join(', '),
-                'Estados ignorados': excludedStates.join(', '),
-                'Taxa de Conclusão': completionRate + '%',
-                'Projetos Únicos': uniqueProjects,
-                'Issues excluídas do cálculo': issues.length - total
-            });
+            statusMessage.innerHTML = `${icones[tipo]} ${texto}`;
+            statusMessage.className = `status-message ${tipo}`;
+            statusMessage.classList.remove('hidden');
+
+            // Auto-hide após 5 segundos
+            setTimeout(() => {
+                statusMessage.classList.add('hidden');
+            }, 5000);
         }
 
-        // Renderizar dashboard
-        function renderDashboard() {
-            console.log('🎨 Renderizando dashboard...');
-            renderMetrics();
-        }
+        // Expor função globalmente para o botão
+        window.carregarDados = carregarDados;
 
-        // Renderizar métricas
-        function renderMetrics() {
-            const metrics = dashboardData.metrics;
-            const grid = document.getElementById('metricsGrid');
+        // Inicializar quando a página carregar
+        document.addEventListener('DOMContentLoaded', inicializarWidget);
 
-            // Determinar cor do card de taxa de conclusão
-            const completionClass = metrics.completionRate >= 80 ? 'success' :
-                                   metrics.completionRate >= 60 ? 'warning' : 'critical';
-
-            grid.innerHTML = `
-                <div class="metric-card">
-                    <div class="metric-value">${metrics.total}</div>
-                    <div class="metric-label">Total de Issues</div>
-                </div>
-                <div class="metric-card metric-card-success">
-                    <div class="metric-value">${metrics.resolved}</div>
-                    <div class="metric-label">Issues Resolvidas</div>
-                </div>
-                <div class="metric-card metric-card-warning">
-                    <div class="metric-value">${metrics.active}</div>
-                    <div class="metric-label">Issues Ativas</div>
-                </div>
-                <div class="metric-card metric-card-${completionClass}">
-                    <div class="metric-value">${metrics.completionRate}%</div>
-                    <div class="metric-label">Taxa de Conclusão</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-value">${metrics.projects}</div>
-                    <div class="metric-label">Projetos</div>
-                </div>
-            `;
-        }
-
-        // Inicializar dashboard quando a página carregar
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('🌟 DOM carregado, inicializando dashboard...');
-            loadData();
-        });
-
-        console.log('✅ Performance Dashboard configurado');
+        console.log('✅ iMarinho Performance Dashboard Moderno configurado');
     </script>
 </body>
 </html>

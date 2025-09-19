@@ -1,129 +1,178 @@
-# YouTrack Performance Dashboard
+# 📊 iMarinho Performance Dashboard - Versão 2.0 (Moderna)
 
-Plugin para YouTrack que adiciona widgets de dashboard para análise de KPIs e métricas de performance.
+Plugin para YouTrack 2024.1+ que adiciona widget de dashboard para análise de KPIs e métricas de performance usando a **arquitetura moderna de Apps** (`YTApp.register()`).
 
-## Widgets Inclusos
+## 🆕 Novidades da Versão 2.0
 
-### 1. Performance KPIs
-- Total de issues dos últimos 30 dias
-- Issues resolvidas (quantidade e percentual)
-- Tempo médio de resolução
+- ✅ **Migrado para arquitetura moderna** (`YTApp.register()`)
+- ✅ **Compatível com YouTrack 2024.1+**
+- ✅ **Zero problemas de CORS** - API nativa do YouTrack
+- ✅ **Estados corretos** (MAIÚSCULAS)
+- ✅ **Melhor tratamento de erros** com fallback robusto
+- ✅ **Interface moderna** com animações e gradientes
+- ✅ **Branding iMarinho** em todos os cards
+- ✅ **Team statistics** da equipe iMarinho
+- ✅ **Auto-resize** e responsividade aprimorada
 
-### 2. Issues por Prioridade
-- Gráfico de pizza mostrando distribuição por prioridade
-- Percentuais e contagens
+## 📊 Métricas Incluídas
 
-### 3. Issues por Projeto
-- Gráfico de barras mostrando volume por projeto
-- Comparação visual entre projetos
+### 🎯 4 Cards Principais:
+1. **📊 Total de Issues** - Excluindo BACKLOG e MOVED TO NEXT SPRINT
+2. **✅ Issues Resolvidas** - Estados: DONE, CLOSED, PRODUCTION
+3. **🚀 Issues Ativas** - Estados: IN DEVELOPMENT, CORRECTION, READY TO REVIEW, REVIEWING, APPROVED
+4. **📈 Taxa de Conclusão** - (Resolvidas / Total) × 100
+5. **📁 Projetos** - Número de projetos únicos
 
-### 4. Timeline de Issues
-- Gráfico de linha mostrando criação ao longo dos últimos 30 dias
-- Identificação de picos e tendências
+### 📋 Detalhes Incluídos:
+- Distribuição completa por estados
+- Top 5 team iMarinho
+- Issues ignoradas no cálculo
+- Timestamp de última atualização
+- Powered by iMarinho Performance Suite v2.0
 
-### 5. Performance da Equipe
-- Gráfico de barras comparando issues totais vs resolvidas
-- Top 10 membros da equipe por volume
-- Taxa de resolução por pessoa
+## 🚀 Instalação
 
-## Instalação
-
-### Método 1: Upload Manual
-1. Baixe ou gere o arquivo ZIP do plugin
+### Via Upload Manual (Recomendado)
+1. Baixe o arquivo `youtrack-performance-dashboard-v2.zip`
 2. Acesse YouTrack como administrador
 3. Vá em **Administration** → **Apps**
 4. Clique em **Upload app**
-5. Selecione o arquivo `youtrack-performance-dashboard.zip`
+5. Selecione o arquivo ZIP
 6. Clique em **Upload**
 
-### Método 2: Build Local
+### Build Local
 ```bash
-# Clone ou baixe os arquivos
 cd youtrack-app
 
-# Gerar o ZIP (Linux/Mac)
-npm run build
+# Instalar dependências (se necessário)
+npm install
 
-# Gerar o ZIP (Windows)
-powershell Compress-Archive -Path manifest.json,widgets -DestinationPath youtrack-performance-dashboard.zip
+# Build do widget
+npm run build
 ```
 
-## Configuração
+## ⚙️ Configuração
 
 1. Após instalar o app, vá em **Dashboard**
 2. Clique em **Add widget**
-3. Selecione os widgets do Performance Dashboard:
-   - Performance KPIs
-   - Issues por Prioridade
-   - Issues por Projeto
-   - Timeline de Issues
-   - Performance da Equipe
+3. Selecione **iMarinho Performance Dashboard Moderno**
+4. Configure as dimensões conforme necessário (recomendado: 800x500px)
 
-## Funcionalidades
+## 🛠️ Desenvolvimento
 
-- **Atualização automática**: Dados são atualizados a cada 5 minutos
-- **Período configurável**: Atualmente fixado em 30 dias
-- **Interface responsiva**: Adapta-se ao tamanho do widget
-- **Tratamento de erros**: Exibe mensagens claras em caso de falha
+```bash
+# Instalar dependências
+npm install
 
-## Tecnologias Utilizadas
+# Servidor de desenvolvimento (recomendado)
+npm run dev
 
-- **HTML5/CSS3**: Interface dos widgets
-- **Chart.js**: Gráficos interativos
-- **YouTrack REST API**: Coleta de dados
-- **JavaScript ES6+**: Lógica dos widgets
+# Para HTTPS (se necessário)
+npm run dev-https
 
-## Personalização
-
-Para personalizar os widgets:
-
-1. Modifique os arquivos HTML em `widgets/*/index.html`
-2. Ajuste estilos CSS diretamente nos arquivos
-3. Altere consultas da API conforme necessário
-4. Gere novo ZIP e reinstale
-
-## Estrutura do Projeto
-
-```
-youtrack-app/
-├── manifest.json                    # Configuração do app
-├── package.json                     # Metadados do projeto
-├── README.md                        # Documentação
-└── widgets/
-    ├── kpis/
-    │   └── index.html              # Widget de KPIs
-    ├── priority-chart/
-    │   └── index.html              # Gráfico de prioridades
-    ├── project-chart/
-    │   └── index.html              # Gráfico de projetos
-    ├── timeline/
-    │   └── index.html              # Timeline de issues
-    └── team-performance/
-        └── index.html              # Performance da equipe
+# Testar o widget
+npm run test
 ```
 
-## API Utilizada
+### URLs de Desenvolvimento:
+- **HTTP**: http://localhost:9033
+- **Widget**: http://localhost:9033/widgets/dashboard-suite/index.html
 
-O plugin utiliza as seguintes endpoints da API REST do YouTrack:
+## 📋 Requisitos
 
-- `/api/issues` - Busca de issues com filtros
-- Campos utilizados: `id`, `created`, `resolved`, `priority`, `project`, `assignee`, `state`
-- Filtros: Período de criação dos últimos 30 dias
+- **YouTrack 2024.1+** (obrigatório para YTApp.register)
+- **Permissões:** READ_ISSUE, READ_PROJECT, READ_USER
+- **Dados:** Issues dos últimos 30 dias
+- **Node.js**: 18.0.0+ (para desenvolvimento)
 
-## Limitações
+## 🔧 Arquitetura Técnica
 
-- Período fixo de 30 dias (pode ser personalizado no código)
-- Máximo de 1000 issues por consulta
-- Requer permissões de leitura nas issues
-- Funciona apenas com YouTrack 2023.1+
+### API Moderna:
+```javascript
+// Registra com YouTrack
+host = await YTApp.register({
+    onUnhandledError: (error) => { ... }
+});
 
-## Suporte
+// Busca dados sem CORS
+const issues = await host.fetchYouTrack(
+    'api/issues?fields=...'
+);
+```
 
-Para problemas ou sugestões:
-1. Verifique os logs do browser (F12 → Console)
-2. Confirme permissões de acesso às issues
-3. Teste com consultas manuais na API
+### Estados Configurados:
+```javascript
+const ESTADOS_RESOLVIDOS = ['DONE', 'CLOSED', 'PRODUCTION'];
+const ESTADOS_IGNORADOS = ['BACKLOG', 'MOVED TO NEXT SPRINT'];
+const ESTADOS_ATIVOS = ['IN DEVELOPMENT', 'CORRECTION', 'READY TO REVIEW', 'REVIEWING', 'APPROVED'];
+```
 
-## Licença
+## 🔧 Troubleshooting
 
-MIT License - veja arquivo de licença para detalhes.
+### ❌ Widget não carrega
+- **Verifique versão**: YouTrack 2024.1+ obrigatório
+- **Verifique manifest**: Schema deve ser `youtrack-app.json`
+- **Verifique logs**: Console do navegador para erros
+
+### ⚠️ Dados não aparecem
+- **Verifique permissões**: READ_ISSUE, READ_PROJECT, READ_USER
+- **Fallback automático**: Widget mostra dados de exemplo se API falhar
+- **Query**: Busca issues dos últimos 30 dias
+
+### 🔄 Erro de API
+- **Fallback robusto**: Sistema automaticamente usa dados de exemplo
+- **Logs detalhados**: Console mostra exatamente o que aconteceu
+- **Retry**: Botão "Atualizar" para tentar novamente
+
+## 📈 Performance
+
+- **Cache inteligente**: 5 minutos de cache automático
+- **Auto-refresh**: Atualização a cada 5 minutos
+- **Lazy loading**: Carregamento otimizado
+- **Responsive design**: Adapta-se a qualquer tamanho
+
+## 🎨 Customização
+
+### Cores dos Cards:
+- **Total**: #3B82F6 (Azul)
+- **Resolvidas**: #10B981 (Verde)
+- **Ativas**: #F59E0B (Laranja)
+- **Taxa**: #8B5CF6 (Roxo)
+- **Projetos**: #6B7280 (Cinza)
+
+### Branding iMarinho:
+- Badge "iMarinho" em cada card
+- Dados de exemplo com equipe iMarinho
+- Projetos iMarinho (IPERF, IYT, IANAL, IREP)
+- Powered by iMarinho Performance Suite v2.0
+
+## 📄 Changelog
+
+### v2.0.0 (Atual)
+- 🚀 **BREAKING**: Migração completa para `YTApp.register()`
+- ✅ Compatibilidade com YouTrack 2024.1+
+- 🎨 Interface completamente redesenhada
+- 📊 Branding iMarinho integrado
+- 🔧 Zero problemas de CORS
+- 📈 Performance melhorada
+- 🛡️ Fallback mais robusto
+
+### v1.x.x (Legado)
+- ❌ Usado API `YT` descontinuada
+- ❌ Problemas de CORS
+- ❌ Compatibilidade limitada
+
+## 📞 Suporte
+
+- **Desenvolvido por**: iMarinho Team
+- **Email**: dev@imarinho.com
+- **URL**: https://imarinho.com
+- **GitHub**: https://github.com/imarinho/youtrack-performance-tracking
+
+## 📄 Licença
+
+MIT License - Developed by iMarinho Team
+
+---
+
+**🎯 iMarinho Performance Dashboard v2.0 - Powered by Modern YouTrack Apps Architecture**

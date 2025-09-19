@@ -1,25 +1,41 @@
 {
-  "name": "youtrack-performance-dashboard",
-  "version": "1.0.0",
-  "description": "Dashboard gerencial para análise de KPIs e métricas de performance do YouTrack",
-  "main": "manifest.json",
-  "scripts": {
-    "build": "npm run zip",
-    "zip": "powershell \"Compress-Archive -Path manifest.json,widgets,README.md -DestinationPath youtrack-performance-dashboard.zip -Force\"",
-    "clean": "del *.zip",
-    "upload": "node upload.js"
-  },
-  "keywords": [
-    "youtrack",
-    "dashboard",
-    "kpi",
-    "metrics",
-    "performance"
-  ],
-  "author": "iMarinho",
-  "license": "MIT",
-  "dependencies": {
-    "dotenv": "^17.2.2",
-    "form-data": "^4.0.4"
-  }
+    "name": "youtrack-performance-dashboard",
+    "version": "2.0.0",
+    "description": "Dashboard iMarinho para análise de KPIs e métricas de performance do YouTrack - Versão Moderna (YTApp.register)",
+    "main": "manifest.json",
+    "scripts": {
+        "dev": "http-server . --cors -c-1 -p 9033",
+        "dev-https": "npx ngrok http 9033",
+        "build": "powershell \"Compress-Archive -Path manifest.json,widgets,README.md,icon.svg -DestinationPath youtrack-performance-dashboard-v2.zip -Force\"",
+        "clean": "del *.zip",
+        "upload": "node upload.js",
+        "test": "echo 'Abra http://localhost:9033 para testar o widget'"
+    },
+    "keywords": [
+        "youtrack",
+        "dashboard",
+        "kpi",
+        "metrics",
+        "performance",
+        "modern",
+        "ytapp",
+        "imarinho",
+        "v2"
+    ],
+    "author": "iMarinho",
+    "license": "MIT",
+    "dependencies": {
+        "dotenv": "^17.2.2",
+        "form-data": "^4.0.4"
+    },
+    "devDependencies": {
+        "http-server": "^14.1.1"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/imarinho/youtrack-performance-tracking"
+    }
 }

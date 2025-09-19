@@ -13,13 +13,13 @@ if (!YOUTRACK_URL || !YOUTRACK_TOKEN) {
     process.exit(1);
 }
 
-const APP_ZIP_PATH = './youtrack-performance-dashboard.zip';
+const APP_ZIP_PATH = './youtrack-performance-dashboard-v2.zip';
 
 async function uploadApp() {
     try {
         // Verificar se o arquivo ZIP existe
         if (!fs.existsSync(APP_ZIP_PATH)) {
-            console.error('❌ Arquivo youtrack-performance-dashboard.zip não encontrado. Execute "npm run build" primeiro.');
+            console.error('❌ Arquivo youtrack-performance-dashboard-v2.zip não encontrado. Execute "npm run build" primeiro.');
             process.exit(1);
         }
 

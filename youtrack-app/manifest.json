@@ -1,33 +1,33 @@
 {
-  "key": "youtrack-performance-dashboard",
-  "name": "imarinho-performance-dashboard",
-  "version": "1.0.1",
-  "description": "Dashboard iMarinho para análise de KPIs e métricas de performance do YouTrack",
-  "vendor": {
-    "name": "iMarinho",
-    "email": "dev@imarinho.com",
-    "url": "https://imarinho.com"
-  },
-  "minYouTrackVersion": "2023.1.0",
-  "maxYouTrackVersion": "2025.3.0",
-  "permissions": [
-    {
-      "permission": "READ_ISSUE"
+    "$schema": "https://json.schemastore.org/youtrack-app.json",
+    "name": "youtrack-performance-dashboard",
+    "title": "iMarinho Performance Dashboard Suite",
+    "description": "Dashboard iMarinho para análise de KPIs e métricas de performance do YouTrack - Arquitetura Moderna",
+    "version": "2.0.0",
+    "url": "https://github.com/imarinho/youtrack-performance-tracking",
+    "icon": "icon.svg",
+    "minYouTrackVersion": "2024.1.0",
+    "vendor": {
+        "name": "iMarinho",
+        "url": "https://imarinho.com",
+        "email": "dev@imarinho.com"
     },
-    {
-      "permission": "READ_PROJECT"
-    },
-    {
-      "permission": "READ_USER"
-    }
-  ],
-  "widgets": [
-    {
-      "key": "imarinho-performance-dashboard-suite",
-      "name": "iMarinho Performance Dashboard Suite",
-      "description": "iMarinho - Suite completa de análise de performance com KPIs, gráficos e métricas em tempo real",
-      "extensionPoint": "DASHBOARD_WIDGET",
-      "indexPath": "widgets/dashboard-suite/index.html"
-    }
-  ]
+    "widgets": [
+        {
+            "key": "imarinho-performance-dashboard-modern",
+            "name": "iMarinho Performance Dashboard Moderno",
+            "description": "Suite completa de métricas: Total de Issues, Issues Resolvidas, Issues Ativas, Taxa de Conclusão - por iMarinho",
+            "extensionPoint": "DASHBOARD_WIDGET",
+            "indexPath": "widgets/dashboard-suite/index.html",
+            "permissions": [
+                "READ_ISSUE",
+                "READ_PROJECT",
+                "READ_USER"
+            ],
+            "defaultDimensions": {
+                "height": "10fr",
+                "width": "16fr"
+            }
+        }
+    ]
 }
