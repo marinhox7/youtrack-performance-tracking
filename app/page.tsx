@@ -1,23 +1,93 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { PerformanceMetrics } from '@/types/youtrack'
-import { PerformanceAPI } from '@/lib/performance-api'
-import { MetricCard } from '@/components/MetricCard'
+import { YouTrackIssue, DashboardKPI, ChartData, DashboardFilters } from '@/types/youtrack'
+import { youTrackAPI } from '@/lib/youtrack-api'
+import { KPICalculator } from '@/lib/kpi-calculator'
+import { enrichIssuesWithSprint } from '@/lib/utils'
+import { SprintFilter } from '@/components/SprintFilter'
+import { DashboardHeader } from '@/components/DashboardHeader'
+import { KPICard } from '@/components/KPICard'
+import { BarChart } from '@/components/BarChart'
+import { PieChart } from '@/components/PieChart'
+import { LineChart } from '@/components/LineChart'
 
 export default function Dashboard() {
-  const [metrics, setMetrics] = useState<PerformanceMetrics | null>(null)
+  const [issues, setIssues] = useState<YouTrackIssue[]>([])
+  const [kpis, setKpis] = useState<DashboardKPI[]>([])
+  const [charts, setCharts] = useState<{
+    priorityData: ChartData[]
+    projectData: ChartData[]
+    stateData: ChartData[]
+    timelineData: ChartData[]
+    teamData: ChartData[]
+  }>({
+    priorityData: [],
+    projectData: [],
+    stateData: [],
+    timelineData: [],
+    teamData: []
+  })
+  const [filters, setFilters] = useState<DashboardFilters>({
+    selectedSprint: null,
+    dateRange: {
+      start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 dias atrás
+      end: new Date()
+    }
+  })
   const [isLoading, setIsLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const loadData = async (forceRefresh: boolean = false) => {
+  const loadData = async () => {
     try {
       setIsLoading(true)
       setError(null)
 
-      const performanceMetrics = await PerformanceAPI.getPerformanceMetrics(forceRefresh)
-      setMetrics(performanceMetrics)
+      let issuesData: YouTrackIssue[]
+
+      if (filters.selectedSprint) {
+        // Buscar issues por sprint e período
+        issuesData = await youTrackAPI.getIssuesBySprintAndDateRange(
+          filters.selectedSprint,
+          filters.dateRange.start,
+          filters.dateRange.end
+        )
+      } else {
+        // Buscar issues apenas por período
+        issuesData = await youTrackAPI.getIssuesByDateRange(
+          filters.dateRange.start,
+          filters.dateRange.end
+        )
+      }
+
+      // Enriquecer issues com dados de sprint
+      const enrichedIssues = enrichIssuesWithSprint(issuesData)
+      setIssues(enrichedIssues)
+
+      // Calcular KPIs com filtro de sprint
+      const totalIssues = KPICalculator.calculateTotalIssuesBySprint(enrichedIssues, filters.selectedSprint)
+      const resolvedIssues = KPICalculator.calculateResolvedIssuesBySprint(enrichedIssues, filters.selectedSprint)
+      const activeIssues = KPICalculator.calculateActiveIssuesBySprint(enrichedIssues, filters.selectedSprint)
+      const avgResolutionTime = KPICalculator.calculateAverageResolutionTime(enrichedIssues, filters.selectedSprint)
+
+      setKpis([totalIssues, resolvedIssues, activeIssues, avgResolutionTime])
+
+      // Calcular dados para gráficos com filtro
+      const priorityData = KPICalculator.calculateIssuesByPriority(enrichedIssues, filters.selectedSprint)
+      const projectData = KPICalculator.calculateIssuesByProject(enrichedIssues, filters.selectedSprint)
+      const stateData = KPICalculator.calculateIssuesByState(enrichedIssues, filters.selectedSprint)
+      const timelineData = KPICalculator.calculateIssuesCreatedOverTime(enrichedIssues)
+      const teamData = KPICalculator.calculateTeamPerformance(enrichedIssues, filters.selectedSprint)
+
+      setCharts({
+        priorityData,
+        projectData,
+        stateData,
+        timelineData,
+        teamData
+      })
+
       setLastUpdated(new Date())
     } catch (err) {
       console.error('Erro ao carregar dados:', err)
@@ -27,13 +97,25 @@ export default function Dashboard() {
     }
   }
 
+  const handleSprintChange = (sprint: string | null) => {
+    setFilters(prev => ({
+      ...prev,
+      selectedSprint: sprint
+    }))
+  }
+
   useEffect(() => {
     loadData()
+  }, [filters.selectedSprint]) // Recarregar quando sprint mudar
 
-    // Auto-refresh every 30 seconds
+  useEffect(() => {
+    // Carregamento inicial
+    loadData()
+
+    // Auto-refresh every 5 minutes
     const interval = setInterval(() => {
       loadData()
-    }, 30000)
+    }, 300000)
 
     return () => clearInterval(interval)
   }, [])
@@ -64,74 +146,19 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">YouTrack Performance Dashboard</h1>
-              <p className="mt-1 text-sm text-gray-500">
-                Acompanhe as métricas de performance do seu projeto
-              </p>
-            </div>
-            <div className="flex items-center space-x-4">
-              {lastUpdated && (
-                <p className="text-sm text-gray-500">
-                  Última atualização: {lastUpdated.toLocaleTimeString('pt-BR')}
-                </p>
-              )}
-              <button
-                onClick={() => loadData(true)}
-                disabled={isLoading}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading ? (
-                  <>
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Atualizando...
-                  </>
-                ) : (
-                  '🔄 Atualizar'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+      <DashboardHeader
+        onRefresh={loadData}
+        lastUpdated={lastUpdated}
+        isLoading={isLoading}
+        selectedSprint={filters.selectedSprint}
+      />
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Performance Metrics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <MetricCard
-            title="Total de Issues"
-            value={metrics?.totalIssues || 0}
-            icon="📊"
-            color="blue"
-            isLoading={isLoading}
-          />
-          <MetricCard
-            title="Issues Resolvidas"
-            value={metrics?.resolvedIssues || 0}
-            icon="✅"
-            color="green"
-            isLoading={isLoading}
-          />
-          <MetricCard
-            title="Issues Ativas"
-            value={metrics?.activeIssues || 0}
-            icon="🚀"
-            color="orange"
-            isLoading={isLoading}
-          />
-          <MetricCard
-            title="Taxa de Conclusão"
-            value={metrics ? `${metrics.completionRate}%` : '0%'}
-            icon="📈"
-            color="purple"
+        {/* Filtro de Sprint */}
+        <div className="mb-8">
+          <SprintFilter
+            selectedSprint={filters.selectedSprint}
+            onSprintChange={handleSprintChange}
             isLoading={isLoading}
           />
         </div>
@@ -157,42 +184,68 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Summary Section */}
-        {metrics && !isLoading && (
+        {/* KPI Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          {kpis.map((kpi, index) => (
+            <KPICard key={index} kpi={kpi} isLoading={isLoading} />
+          ))}
+        </div>
+
+        {/* Charts Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+          {/* Issues por Prioridade */}
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Issues por Prioridade</h3>
+            <PieChart data={charts.priorityData} isLoading={isLoading} />
+          </div>
+
+          {/* Issues por Estado */}
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Issues por Estado</h3>
+            <BarChart data={charts.stateData} isLoading={isLoading} />
+          </div>
+
+          {/* Issues por Projeto */}
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Issues por Projeto</h3>
+            <BarChart data={charts.projectData} isLoading={isLoading} />
+          </div>
+
+          {/* Performance da Equipe */}
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Performance da Equipe</h3>
+            <BarChart data={charts.teamData} isLoading={isLoading} />
+          </div>
+        </div>
+
+        {/* Timeline Chart */}
+        <div className="bg-white p-6 rounded-lg shadow mb-8">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Issues Criadas ao Longo do Tempo</h3>
+          <LineChart data={charts.timelineData} isLoading={isLoading} />
+        </div>
+
+        {/* Resumo */}
+        {issues.length > 0 && !isLoading && (
           <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Resumo das Métricas</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">
+              Resumo {filters.selectedSprint ? `- ${filters.selectedSprint}` : ''}
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
-                <h3 className="text-sm font-medium text-gray-500">Status das Issues</h3>
-                <div className="mt-2 space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-700">Total de Issues:</span>
-                    <span className="text-sm font-medium text-gray-900">{metrics.totalIssues}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-700">Issues Resolvidas:</span>
-                    <span className="text-sm font-medium text-emerald-600">{metrics.resolvedIssues}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-700">Issues Ativas:</span>
-                    <span className="text-sm font-medium text-amber-600">{metrics.activeIssues}</span>
-                  </div>
-                </div>
+                <h3 className="text-sm font-medium text-gray-500">Total de Issues</h3>
+                <p className="text-2xl font-bold text-gray-900">{issues.length}</p>
               </div>
               <div>
-                <h3 className="text-sm font-medium text-gray-500">Performance</h3>
-                <div className="mt-2">
-                  <div className="flex justify-between mb-2">
-                    <span className="text-sm text-gray-700">Taxa de Conclusão:</span>
-                    <span className="text-sm font-medium text-violet-600">{metrics.completionRate}%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-violet-500 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${Math.min(metrics.completionRate, 100)}%` }}
-                    ></div>
-                  </div>
-                </div>
+                <h3 className="text-sm font-medium text-gray-500">Sprints Únicas</h3>
+                <p className="text-2xl font-bold text-gray-900">
+                  {new Set(issues.filter(i => i.sprint).map(i => i.sprint!.name)).size}
+                </p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-gray-500">Projetos</h3>
+                <p className="text-2xl font-bold text-gray-900">
+                  {new Set(issues.map(i => i.project.name)).size}
+                </p>
               </div>
             </div>
           </div>

@@ -1,55 +1,85 @@
 import { YouTrackIssue, DashboardKPI, ChartData } from '@/types/youtrack'
+import { filterIssuesBySprint, isIssueResolved, isIssueActive } from '@/lib/utils'
 
 export class KPICalculator {
-  static calculateTotalIssues(issues: YouTrackIssue[]): DashboardKPI {
+  // Versões com filtro de Sprint
+  static calculateTotalIssuesBySprint(issues: YouTrackIssue[], sprintName?: string | null): DashboardKPI {
+    const filteredIssues = filterIssuesBySprint(issues, sprintName || null)
+
     return {
-      title: 'Total de Issues',
-      value: issues.length,
+      title: sprintName ? `Total de Issues - ${sprintName}` : 'Total de Issues',
+      value: filteredIssues.length,
       format: 'number'
     }
   }
 
-  static calculateResolvedIssues(issues: YouTrackIssue[]): DashboardKPI {
-    const resolved = issues.filter(issue => issue.resolved).length
-    const total = issues.length
+  static calculateResolvedIssuesBySprint(issues: YouTrackIssue[], sprintName?: string | null): DashboardKPI {
+    const filteredIssues = filterIssuesBySprint(issues, sprintName || null)
+    const resolved = filteredIssues.filter(issue => isIssueResolved(issue)).length
+    const total = filteredIssues.length
     const percentage = total > 0 ? (resolved / total) * 100 : 0
 
     return {
-      title: 'Issues Resolvidas',
+      title: sprintName ? `Issues Resolvidas - ${sprintName}` : 'Issues Resolvidas',
       value: `${resolved} (${percentage.toFixed(1)}%)`,
+      format: 'number',
+      change: percentage,
+      changeType: percentage >= 70 ? 'increase' : 'decrease'
+    }
+  }
+
+  static calculateActiveIssuesBySprint(issues: YouTrackIssue[], sprintName?: string | null): DashboardKPI {
+    const filteredIssues = filterIssuesBySprint(issues, sprintName || null)
+    const active = filteredIssues.filter(issue => isIssueActive(issue)).length
+
+    return {
+      title: sprintName ? `Issues Ativas - ${sprintName}` : 'Issues Ativas',
+      value: active,
       format: 'number'
     }
   }
 
-  static calculateAverageResolutionTime(issues: YouTrackIssue[]): DashboardKPI {
-    const resolvedIssues = issues.filter(issue => issue.resolved && issue.created)
+  // Versões originais mantidas para compatibilidade
+  static calculateTotalIssues(issues: YouTrackIssue[]): DashboardKPI {
+    return this.calculateTotalIssuesBySprint(issues, null)
+  }
+
+  static calculateResolvedIssues(issues: YouTrackIssue[]): DashboardKPI {
+    return this.calculateResolvedIssuesBySprint(issues, null)
+  }
+
+  static calculateAverageResolutionTime(issues: YouTrackIssue[], sprintName?: string | null): DashboardKPI {
+    const filteredIssues = filterIssuesBySprint(issues, sprintName || null)
+    const resolvedIssues = filteredIssues.filter(issue => isIssueResolved(issue) && issue.created)
 
     if (resolvedIssues.length === 0) {
       return {
-        title: 'Tempo Médio de Resolução',
+        title: sprintName ? `Tempo Médio de Resolução - ${sprintName}` : 'Tempo Médio de Resolução',
         value: 'N/A',
         format: 'time'
       }
     }
 
     const totalTime = resolvedIssues.reduce((sum, issue) => {
-      return sum + (issue.resolved! - issue.created)
+      const resolvedTime = issue.resolved || Date.now()
+      return sum + (resolvedTime - issue.created)
     }, 0)
 
     const averageMs = totalTime / resolvedIssues.length
     const averageDays = Math.round(averageMs / (1000 * 60 * 60 * 24))
 
     return {
-      title: 'Tempo Médio de Resolução',
+      title: sprintName ? `Tempo Médio de Resolução - ${sprintName}` : 'Tempo Médio de Resolução',
       value: `${averageDays} dias`,
       format: 'time'
     }
   }
 
-  static calculateIssuesByPriority(issues: YouTrackIssue[]): ChartData[] {
+  static calculateIssuesByPriority(issues: YouTrackIssue[], sprintName?: string | null): ChartData[] {
+    const filteredIssues = filterIssuesBySprint(issues, sprintName || null)
     const priorityCount: { [key: string]: number } = {}
 
-    issues.forEach(issue => {
+    filteredIssues.forEach(issue => {
       const priority = issue.priority?.name || 'Sem Prioridade'
       priorityCount[priority] = (priorityCount[priority] || 0) + 1
     })
@@ -60,10 +90,11 @@ export class KPICalculator {
     }))
   }
 
-  static calculateIssuesByProject(issues: YouTrackIssue[]): ChartData[] {
+  static calculateIssuesByProject(issues: YouTrackIssue[], sprintName?: string | null): ChartData[] {
+    const filteredIssues = filterIssuesBySprint(issues, sprintName || null)
     const projectCount: { [key: string]: number } = {}
 
-    issues.forEach(issue => {
+    filteredIssues.forEach(issue => {
       const project = issue.project.name
       projectCount[project] = (projectCount[project] || 0) + 1
     })
@@ -74,10 +105,11 @@ export class KPICalculator {
     }))
   }
 
-  static calculateIssuesByState(issues: YouTrackIssue[]): ChartData[] {
+  static calculateIssuesByState(issues: YouTrackIssue[], sprintName?: string | null): ChartData[] {
+    const filteredIssues = filterIssuesBySprint(issues, sprintName || null)
     const stateCount: { [key: string]: number } = {}
 
-    issues.forEach(issue => {
+    filteredIssues.forEach(issue => {
       const state = issue.state?.name || 'Sem Estado'
       stateCount[state] = (stateCount[state] || 0) + 1
     })
@@ -119,10 +151,11 @@ export class KPICalculator {
     }))
   }
 
-  static calculateTeamPerformance(issues: YouTrackIssue[]): ChartData[] {
+  static calculateTeamPerformance(issues: YouTrackIssue[], sprintName?: string | null): ChartData[] {
+    const filteredIssues = filterIssuesBySprint(issues, sprintName || null)
     const userStats: { [key: string]: { resolved: number, total: number } } = {}
 
-    issues.forEach(issue => {
+    filteredIssues.forEach(issue => {
       const assignee = issue.assignee?.fullName || issue.assignee?.name || 'Não Atribuído'
 
       if (!userStats[assignee]) {
@@ -130,7 +163,7 @@ export class KPICalculator {
       }
 
       userStats[assignee].total++
-      if (issue.resolved) {
+      if (isIssueResolved(issue)) {
         userStats[assignee].resolved++
       }
     })

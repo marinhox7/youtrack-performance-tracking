@@ -13,6 +13,7 @@ export interface YouTrackIssue {
   state?: YouTrackFieldValue
   type?: YouTrackFieldValue
   customFields: YouTrackCustomField[]
+  sprint?: SprintValue | null
 }
 
 export interface YouTrackUser {
@@ -67,6 +68,19 @@ export interface PerformanceMetrics {
   completionRate: number
 }
 
+export interface SprintValue {
+  name: string
+  value: string
+}
+
+export interface DashboardFilters {
+  selectedSprint: string | null
+  dateRange: {
+    start: Date
+    end: Date
+  }
+}
+
 export interface IssueWithState {
   id: string
   idReadable: string
@@ -80,4 +94,5 @@ export interface IssueWithState {
     name: string
     shortName: string
   }
+  sprint?: SprintValue | null
 }

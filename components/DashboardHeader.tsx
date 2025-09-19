@@ -4,9 +4,10 @@ interface DashboardHeaderProps {
   onRefresh: () => void
   lastUpdated: Date | null
   isLoading: boolean
+  selectedSprint?: string | null
 }
 
-export function DashboardHeader({ onRefresh, lastUpdated, isLoading }: DashboardHeaderProps) {
+export function DashboardHeader({ onRefresh, lastUpdated, isLoading, selectedSprint }: DashboardHeaderProps) {
   return (
     <div className="bg-white shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -15,9 +16,16 @@ export function DashboardHeader({ onRefresh, lastUpdated, isLoading }: Dashboard
             <h1 className="text-3xl font-bold text-gray-900">
               YouTrack Performance Dashboard
             </h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Análise de KPIs e métricas de performance
-            </p>
+            <div className="flex items-center mt-1 space-x-2">
+              <p className="text-sm text-gray-500">
+                Análise de KPIs e métricas de performance
+              </p>
+              {selectedSprint && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                  Sprint: {selectedSprint}
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex items-center space-x-4">
             {lastUpdated && (
