@@ -69,6 +69,55 @@
             cursor: not-allowed;
         }
 
+        .sprint-filter {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+        }
+
+        .sprint-filter label {
+            font-weight: 600;
+            color: #495057;
+            font-size: 13px;
+        }
+
+        .sprint-select {
+            flex: 1;
+            min-width: 200px;
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 13px;
+            background: white;
+            color: #495057;
+        }
+
+        .sprint-select:focus {
+            outline: none;
+            border-color: #0066cc;
+            box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.2);
+        }
+
+        .clear-filter {
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 12px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .clear-filter:hover {
+            background: #5a6268;
+        }
+
         .status-message {
             padding: 12px 16px;
             border-radius: 6px;
@@ -276,6 +325,14 @@
         </button>
     </div>
 
+    <div class="sprint-filter">
+        <label for="sprintSelect">🏃‍♂️ Filtrar por Sprint:</label>
+        <select id="sprintSelect" class="sprint-select">
+            <option value="">Carregando sprints...</option>
+        </select>
+        <button class="clear-filter" onclick="limparFiltroSprint()">Limpar Filtro</button>
+    </div>
+
     <div id="statusMessage" class="status-message hidden"></div>
 
     <div id="loading" class="loading">
@@ -305,9 +362,11 @@
         let host;
         let dashboardData = {
             issues: [],
+            sprints: [],
             metrics: {},
             detalhes: {}
         };
+        let sprintSelecionada = null;
 
         // Estados do YouTrack (MAIÚSCULAS) - Configuração iMarinho
         const ESTADOS_RESOLVIDOS = ['DONE', 'CLOSED', 'PRODUCTION'];
@@ -328,6 +387,95 @@
             }
             console.groupEnd();
         }
+
+        // Função para carregar sprints disponíveis
+        async function carregarSprints() {
+            try {
+                console.log('🏃‍♂️ Carregando sprints disponíveis...');
+
+                // Buscar todos os bundles (versões) do campo Sprints
+                const bundles = await host.fetchYouTrack('admin/customFieldSettings/bundles/version', {
+                    fields: 'id,name,values(name,id)'
+                });
+
+                logDetalhado('Bundles encontrados', bundles);
+
+                // Encontrar o bundle que contém as sprints
+                let sprintBundle = null;
+                for (const bundle of bundles) {
+                    if (bundle.name && bundle.name.toLowerCase().includes('sprint')) {
+                        sprintBundle = bundle;
+                        break;
+                    }
+                }
+
+                if (!sprintBundle && bundles.length > 0) {
+                    // Se não encontrar pelo nome, usar o primeiro bundle de versão
+                    sprintBundle = bundles[0];
+                }
+
+                if (sprintBundle && sprintBundle.values) {
+                    dashboardData.sprints = sprintBundle.values.map(v => ({
+                        id: v.id,
+                        name: v.name
+                    }));
+
+                    console.log(`✅ ${dashboardData.sprints.length} sprints carregadas:`, dashboardData.sprints.map(s => s.name));
+                    popularSelectSprints();
+                } else {
+                    console.log('⚠️ Nenhum bundle de sprints encontrado');
+                    dashboardData.sprints = [];
+                }
+
+            } catch (error) {
+                console.error('❌ Erro ao carregar sprints:', error);
+                dashboardData.sprints = [];
+                popularSelectSprints();
+            }
+        }
+
+        // Função para popular o select de sprints
+        function popularSelectSprints() {
+            const select = document.getElementById('sprintSelect');
+
+            // Limpar opções existentes
+            select.innerHTML = '';
+
+            // Adicionar opção "Todas as sprints"
+            const optionTodas = document.createElement('option');
+            optionTodas.value = '';
+            optionTodas.textContent = 'Todas as sprints';
+            select.appendChild(optionTodas);
+
+            // Adicionar opções das sprints
+            dashboardData.sprints.forEach(sprint => {
+                const option = document.createElement('option');
+                option.value = sprint.name;
+                option.textContent = sprint.name;
+                select.appendChild(option);
+            });
+
+            // Adicionar evento de mudança
+            select.addEventListener('change', function() {
+                sprintSelecionada = this.value || null;
+                console.log('🏃‍♂️ Sprint selecionada:', sprintSelecionada || 'Todas');
+                carregarDados(); // Recarregar dados com o novo filtro
+            });
+
+            console.log('📋 Select de sprints populado com', dashboardData.sprints.length, 'opções');
+        }
+
+        // Função para limpar filtro de sprint
+        function limparFiltroSprint() {
+            const select = document.getElementById('sprintSelect');
+            select.value = '';
+            sprintSelecionada = null;
+            console.log('🧹 Filtro de sprint limpo');
+            carregarDados(); // Recarregar dados sem filtro
+        }
+
+        // Tornar função disponível globalmente
+        window.limparFiltroSprint = limparFiltroSprint;
 
         // Função para testar conectividade da API
         async function testarAPI() {
@@ -376,6 +524,9 @@
 
                 if (apiDisponivel) {
                     console.log('🎯 API disponível, carregando dados reais...');
+
+                    // Carregar sprints primeiro
+                    await carregarSprints();
                 } else {
                     console.log('⚠️ API indisponível, usando dados de exemplo...');
                 }
@@ -416,15 +567,24 @@
                 const timestampFim = Date.now();
 
                 // Construir query do YouTrack
-                const query = `created: {${timestampInicio} .. ${timestampFim}}`;
+                let query = `created: {${timestampInicio} .. ${timestampFim}}`;
 
-                console.log('🔍 Buscando issues dos últimos 30 dias...');
+                // Adicionar filtro de sprint se uma está selecionada
+                if (sprintSelecionada) {
+                    query += ` Sprints: "${sprintSelecionada}"`;
+                    console.log('🔍 Buscando issues da sprint:', sprintSelecionada);
+                } else {
+                    // Se não há sprint selecionada, pegar apenas issues que têm sprint atribuída
+                    query += ` has: Sprints`;
+                    console.log('🔍 Buscando issues com sprint atribuída...');
+                }
+
                 console.log('📅 Período:', new Date(timestampInicio).toLocaleDateString(), 'até', new Date(timestampFim).toLocaleDateString());
                 console.log('🔍 Query YouTrack:', query);
 
-                // Fazer requisição correta para API do YouTrack
+                // Fazer requisição correta para API do YouTrack - incluindo campo Sprints
                 const issues = await host.fetchYouTrack('issues', {
-                    fields: 'id,idReadable,summary,state(name),project(name,shortName),created,resolved',
+                    fields: 'id,idReadable,summary,state(name),project(name,shortName),created,resolved,customFields(name,value(name))',
                     query: query,
                     '$top': 1000
                 });
@@ -432,12 +592,16 @@
                 logDetalhado('Issues encontradas', issues);
 
                 console.log(`📊 Issues encontradas:`, issues.length);
-                console.log('📋 Primeiras 3 issues:', issues.slice(0, 3).map(i => ({
-                    id: i.idReadable,
-                    summary: i.summary,
-                    state: i.state?.name,
-                    project: i.project?.shortName
-                })));
+                console.log('📋 Primeiras 3 issues:', issues.slice(0, 3).map(i => {
+                    const sprintField = i.customFields?.find(f => f.name === 'Sprints');
+                    return {
+                        id: i.idReadable,
+                        summary: i.summary,
+                        state: i.state?.name,
+                        project: i.project?.shortName,
+                        sprint: sprintField?.value?.name || 'Sem sprint'
+                    };
+                }));
 
                 // Verificar se retornou dados válidos
                 if (!Array.isArray(issues)) {
@@ -452,7 +616,8 @@
                 // Renderizar dashboard
                 renderizarDashboard();
 
-                mostrarMensagem(`✅ Dados reais carregados! ${issues.length} issues dos últimos 30 dias`, 'success');
+                const mensagemSprint = sprintSelecionada ? ` da sprint "${sprintSelecionada}"` : ' com sprint atribuída';
+                mostrarMensagem(`✅ Dados reais carregados! ${issues.length} issues${mensagemSprint}`, 'success');
 
             } catch (error) {
                 console.error('❌ Erro ao carregar dados:', error);
@@ -664,6 +829,13 @@
                 { name: 'iMarinho Reporting Tools', shortName: 'IREP' }
             ];
 
+            const sprintsExemplo = [
+                'Setembro 2025 - Sprint 1',
+                'Setembro 2025 - Sprint 2',
+                'Outubro 2025 - Sprint 1',
+                'Outubro 2025 - Sprint 2'
+            ];
+
             const teamIMarinho = [
                 { name: 'imarinho-dev1', fullName: 'iMarinho Dev Lead' },
                 { name: 'imarinho-dev2', fullName: 'iMarinho Senior Dev' },
@@ -676,6 +848,7 @@
             for (let i = 1; i <= 50; i++) {
                 const projeto = projetos[Math.floor(Math.random() * projetos.length)];
                 const assignee = teamIMarinho[Math.floor(Math.random() * teamIMarinho.length)];
+                const sprint = sprintsExemplo[Math.floor(Math.random() * sprintsExemplo.length)];
                 let estado;
 
                 // Distribuição realista
@@ -700,11 +873,29 @@
                     created: Date.now() - (Math.random() * 30 * 24 * 60 * 60 * 1000),
                     resolved: ESTADOS_RESOLVIDOS.includes(estado)
                         ? Date.now() - (Math.random() * 15 * 24 * 60 * 60 * 1000)
-                        : null
+                        : null,
+                    customFields: [
+                        {
+                            name: 'Sprints',
+                            value: {
+                                name: sprint
+                            }
+                        }
+                    ]
                 });
             }
 
             dashboardData.issues = dados;
+
+            // Gerar sprints de exemplo se não existirem
+            if (dashboardData.sprints.length === 0) {
+                dashboardData.sprints = sprintsExemplo.map((name, index) => ({
+                    id: `sprint-${index + 1}`,
+                    name: name
+                }));
+                popularSelectSprints();
+            }
+
             console.log('📊 Dados de exemplo iMarinho gerados:', dados.length, 'issues');
         }
 
