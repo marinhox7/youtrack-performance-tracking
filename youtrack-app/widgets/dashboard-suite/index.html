@@ -314,6 +314,40 @@
         const ESTADOS_IGNORADOS = ['BACKLOG', 'MOVED TO NEXT SPRINT'];
         const ESTADOS_ATIVOS = ['IN DEVELOPMENT', 'CORRECTION', 'READY TO REVIEW', 'REVIEWING', 'APPROVED'];
 
+        // Função utilitária para logs detalhados
+        function logDetalhado(titulo, dados) {
+            console.group(`📊 ${titulo}`);
+            console.log('Dados:', dados);
+            console.log('Tipo:', typeof dados);
+            console.log('É Array:', Array.isArray(dados));
+            if (Array.isArray(dados)) {
+                console.log('Tamanho:', dados.length);
+                if (dados.length > 0) {
+                    console.log('Primeiro item:', dados[0]);
+                }
+            }
+            console.groupEnd();
+        }
+
+        // Função para testar conectividade da API
+        async function testarAPI() {
+            try {
+                console.log('🔬 Testando conectividade da API...');
+
+                // Teste simples: buscar informações do usuário atual
+                const usuario = await host.fetchYouTrack('users/me', {
+                    fields: 'id,login,name'
+                });
+
+                console.log('✅ API funcionando! Usuário atual:', usuario);
+                return true;
+
+            } catch (error) {
+                console.error('❌ Teste de API falhou:', error);
+                return false;
+            }
+        }
+
         // Inicialização do widget
         async function inicializarWidget() {
             try {
@@ -335,6 +369,15 @@
                 // Configurar altura inicial (se disponível)
                 if (host.resize) {
                     host.resize(800, 500);
+                }
+
+                // Testar API antes de carregar dados
+                const apiDisponivel = await testarAPI();
+
+                if (apiDisponivel) {
+                    console.log('🎯 API disponível, carregando dados reais...');
+                } else {
+                    console.log('⚠️ API indisponível, usando dados de exemplo...');
                 }
 
                 // Carregar dados iniciais
@@ -363,50 +406,76 @@
 
             try {
                 mostrarLoading(true);
+                host.setLoadingAnimationEnabled(true);
+                host.clearError();
 
-                if (host) {
-                    host.setLoadingAnimationEnabled(true);
-                    host.clearError();
-                }
-
-                // Buscar todas as issues (últimos 30 dias)
+                // Buscar issues dos últimos 30 dias
                 const dataInicio = new Date();
                 dataInicio.setDate(dataInicio.getDate() - 30);
+                const timestampInicio = dataInicio.getTime();
+                const timestampFim = Date.now();
+
+                // Construir query do YouTrack
+                const query = `created: {${timestampInicio} .. ${timestampFim}}`;
 
                 console.log('🔍 Buscando issues dos últimos 30 dias...');
+                console.log('📅 Período:', new Date(timestampInicio).toLocaleDateString(), 'até', new Date(timestampFim).toLocaleDateString());
+                console.log('🔍 Query YouTrack:', query);
 
-                // Formatar datas para o formato do YouTrack (YYYY-MM-DD)
-                const dataInicioFormatada = dataInicio.toISOString().split('T')[0];
-                const dataAtualFormatada = new Date().toISOString().split('T')[0];
+                // Fazer requisição correta para API do YouTrack
+                const issues = await host.fetchYouTrack('issues', {
+                    fields: 'id,idReadable,summary,state(name),project(name,shortName),created,resolved',
+                    query: query,
+                    '$top': 1000
+                });
 
-                if (host && host.fetchYouTrack) {
-                    const issues = await host.fetchYouTrack(
-                        `api/issues?fields=id,idReadable,summary,state(name),project(name,shortName),created,resolved,assignee(name,fullName)&query=created: ${dataInicioFormatada} .. ${dataAtualFormatada}&$top=1000`
-                    );
+                logDetalhado('Issues encontradas', issues);
 
-                    console.log(`📊 Issues encontradas: ${issues.length}`);
-                    dashboardData.issues = issues;
+                console.log(`📊 Issues encontradas:`, issues.length);
+                console.log('📋 Primeiras 3 issues:', issues.slice(0, 3).map(i => ({
+                    id: i.idReadable,
+                    summary: i.summary,
+                    state: i.state?.name,
+                    project: i.project?.shortName
+                })));
 
-                    // Calcular métricas
-                    calcularMetricas();
-
-                    // Renderizar dashboard
-                    renderizarDashboard();
-
-                    mostrarMensagem(`✅ Dados iMarinho atualizados! ${issues.length} issues processadas`, 'success');
-
-                } else {
-                    throw new Error('API do YouTrack não disponível');
+                // Verificar se retornou dados válidos
+                if (!Array.isArray(issues)) {
+                    throw new Error('Resposta da API não é um array de issues');
                 }
+
+                dashboardData.issues = issues;
+
+                // Calcular métricas
+                calcularMetricas();
+
+                // Renderizar dashboard
+                renderizarDashboard();
+
+                mostrarMensagem(`✅ Dados reais carregados! ${issues.length} issues dos últimos 30 dias`, 'success');
 
             } catch (error) {
                 console.error('❌ Erro ao carregar dados:', error);
+                logDetalhado('Detalhes do erro', {
+                    status: error.status,
+                    message: error.message,
+                    data: error.data
+                });
 
-                if (host) {
-                    host.setError(`Erro ao carregar dados: ${error.message}`);
+                // Mostrar erro específico baseado no status
+                let mensagemErro = 'Erro desconhecido';
+                if (error.status === 404) {
+                    mensagemErro = 'Endpoint não encontrado - verificar URL da API';
+                } else if (error.status === 403) {
+                    mensagemErro = 'Sem permissão para acessar issues - verificar permissões do app';
+                } else if (error.status === 401) {
+                    mensagemErro = 'Não autorizado - verificar autenticação';
+                } else if (error.message) {
+                    mensagemErro = error.message;
                 }
 
-                mostrarMensagem(`⚠️ API indisponível - exibindo dados de exemplo iMarinho`, 'warning');
+                host.setError(`Erro na API: ${mensagemErro}`);
+                mostrarMensagem(`❌ Erro ao carregar dados reais: ${mensagemErro}. Usando dados de exemplo.`, 'error');
 
                 // Usar dados de exemplo como fallback
                 gerarDadosExemplo();
@@ -415,10 +484,7 @@
 
             } finally {
                 mostrarLoading(false);
-
-                if (host) {
-                    host.setLoadingAnimationEnabled(false);
-                }
+                host.setLoadingAnimationEnabled(false);
             }
         }
 
