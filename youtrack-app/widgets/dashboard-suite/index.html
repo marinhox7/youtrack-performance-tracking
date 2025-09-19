@@ -388,49 +388,130 @@
             console.groupEnd();
         }
 
-        // Função para carregar sprints disponíveis
+        // Função para carregar sprints disponíveis (baseada na lógica do workflow)
         async function carregarSprints() {
             try {
                 console.log('🏃‍♂️ Carregando sprints disponíveis...');
 
-                // Buscar todos os bundles (versões) do campo Sprints
-                const bundles = await host.fetchYouTrack('admin/customFieldSettings/bundles/version', {
-                    fields: 'id,name,values(name,id)'
+                // Método 1: Buscar diretamente o campo Sprints de qualquer projeto
+                try {
+                    const projects = await host.fetchYouTrack('admin/projects', {
+                        fields: 'id,name,shortName',
+                        '$top': 10
+                    });
+
+                    if (projects && projects.length > 0) {
+                        const firstProject = projects[0];
+                        console.log('🎯 Testando projeto:', firstProject.shortName);
+
+                        // Buscar campo Sprints no projeto
+                        const customFields = await host.fetchYouTrack(`admin/projects/${firstProject.id}/customFields`, {
+                            fields: 'field(name,fieldType),bundle(id,values(id,name,archived))'
+                        });
+
+                        const sprintsField = customFields.find(cf =>
+                            cf.field && cf.field.name === 'Sprints'
+                        );
+
+                        if (sprintsField && sprintsField.bundle && sprintsField.bundle.values) {
+                            console.log('✅ Campo Sprints encontrado no projeto:', firstProject.shortName);
+
+                            // Filtrar sprints não arquivadas
+                            const sprintsAtivos = sprintsField.bundle.values.filter(v => !v.archived);
+                            console.log(`📋 Sprints ativos encontrados: ${sprintsAtivos.length}`);
+
+                            dashboardData.sprints = sprintsAtivos.map(sprint => ({
+                                id: sprint.id,
+                                name: sprint.name
+                            }));
+
+                            atualizarDropdownSprints();
+                            return; // Sucesso!
+                        }
+                    }
+                } catch (projectError) {
+                    console.log('⚠️ Método de projeto falhou:', projectError.message);
+                }
+
+                // Método 2: Buscar bundles globalmente (fallback)
+                const bundles = await host.fetchYouTrack('admin/customFieldSettings/bundles', {
+                    fields: 'id,name,$type,values(id,name,archived)'
                 });
 
                 logDetalhado('Bundles encontrados', bundles);
 
-                // Encontrar o bundle que contém as sprints
+                // Procurar bundle de versão/sprint usando múltiplos critérios
                 let sprintBundle = null;
-                for (const bundle of bundles) {
-                    if (bundle.name && bundle.name.toLowerCase().includes('sprint')) {
-                        sprintBundle = bundle;
-                        break;
-                    }
+
+                // Procurar por nome exato "Sprints"
+                sprintBundle = bundles.find(bundle =>
+                    bundle.name === 'Sprints'
+                );
+
+                // Se não encontrou, procurar por tipo VersionBundle (como no workflow)
+                if (!sprintBundle) {
+                    sprintBundle = bundles.find(bundle =>
+                        bundle.$type === 'VersionBundle'
+                    );
                 }
 
-                if (!sprintBundle && bundles.length > 0) {
-                    // Se não encontrar pelo nome, usar o primeiro bundle de versão
-                    sprintBundle = bundles[0];
+                // Se não encontrou, procurar por nomes similares
+                if (!sprintBundle) {
+                    sprintBundle = bundles.find(bundle =>
+                        bundle.name && (
+                            bundle.name.toLowerCase().includes('sprint') ||
+                            bundle.name.toLowerCase().includes('version') ||
+                            bundle.name.toLowerCase().includes('versão')
+                        )
+                    );
                 }
 
-                if (sprintBundle && sprintBundle.values) {
-                    dashboardData.sprints = sprintBundle.values.map(v => ({
-                        id: v.id,
-                        name: v.name
+                console.log('🔍 Analisando todos os bundles:');
+                bundles.forEach((bundle, index) => {
+                    console.log(`Bundle ${index + 1}:`, {
+                        id: bundle.id,
+                        name: bundle.name,
+                        type: bundle.$type,
+                        valuesCount: bundle.values ? bundle.values.length : 0
+                    });
+                });
+
+                if (sprintBundle) {
+                    console.log('✅ Bundle de sprints encontrado:', {
+                        id: sprintBundle.id,
+                        name: sprintBundle.name,
+                        type: sprintBundle.$type,
+                        values: sprintBundle.values ? sprintBundle.values.length : 0
+                    });
+
+                    // Filtrar valores não arquivados e ativos
+                    const sprintsAtivos = sprintBundle.values ?
+                        sprintBundle.values.filter(v => !v.archived) : [];
+
+                    console.log(`📋 Sprints ativos encontrados: ${sprintsAtivos.length}`);
+
+                    dashboardData.sprints = sprintsAtivos.map(sprint => ({
+                        id: sprint.id,
+                        name: sprint.name
                     }));
 
-                    console.log(`✅ ${dashboardData.sprints.length} sprints carregadas:`, dashboardData.sprints.map(s => s.name));
-                    popularSelectSprints();
+                    atualizarDropdownSprints();
+
                 } else {
-                    console.log('⚠️ Nenhum bundle de sprints encontrado');
+                    console.warn('⚠️ Bundle de sprints não encontrado');
+                    console.log('💡 Bundles disponíveis:', bundles.map(b => ({
+                        name: b.name,
+                        type: b.$type
+                    })));
+
                     dashboardData.sprints = [];
+                    atualizarDropdownSprints();
                 }
 
             } catch (error) {
                 console.error('❌ Erro ao carregar sprints:', error);
                 dashboardData.sprints = [];
-                popularSelectSprints();
+                atualizarDropdownSprints();
             }
         }
 
@@ -465,6 +546,42 @@
             console.log('📋 Select de sprints populado com', dashboardData.sprints.length, 'opções');
         }
 
+        // Atualizar dropdown de sprints
+        function atualizarDropdownSprints() {
+            const select = document.getElementById('sprintSelect');
+            if (!select) return;
+
+            // Limpar opções existentes (exceto "Todos")
+            select.innerHTML = '<option value="">Todas as sprints</option>';
+
+            if (dashboardData.sprints && dashboardData.sprints.length > 0) {
+                console.log('🔄 Atualizando dropdown com', dashboardData.sprints.length, 'sprints');
+
+                dashboardData.sprints.forEach(sprint => {
+                    const option = document.createElement('option');
+                    option.value = sprint.name;
+                    option.textContent = sprint.name;
+                    select.appendChild(option);
+                });
+
+                select.disabled = false;
+
+                // Adicionar evento de mudança se não existir
+                if (!select.hasAttribute('data-listener-added')) {
+                    select.addEventListener('change', function() {
+                        sprintSelecionada = this.value || null;
+                        console.log('🏃‍♂️ Sprint selecionada:', sprintSelecionada || 'Todas');
+                        carregarDados(); // Recarregar dados com o novo filtro
+                    });
+                    select.setAttribute('data-listener-added', 'true');
+                }
+
+            } else {
+                console.warn('⚠️ Nenhum sprint disponível para o dropdown');
+                select.disabled = true;
+            }
+        }
+
         // Função para limpar filtro de sprint
         function limparFiltroSprint() {
             const select = document.getElementById('sprintSelect');
@@ -476,6 +593,148 @@
 
         // Tornar função disponível globalmente
         window.limparFiltroSprint = limparFiltroSprint;
+
+        // Função para extrair valor de campo customizado (baseada no workflow)
+        function extrairCampoCustomizado(issue, nomeCampo) {
+            if (!issue.customFields || !Array.isArray(issue.customFields)) {
+                return null;
+            }
+
+            // Procurar campo por nome exato (como no workflow: issue.project.findFieldByName)
+            const campo = issue.customFields.find(field =>
+                field.name === nomeCampo
+            );
+
+            if (!campo) {
+                // Se não encontrou "Sprints", tentar "Sprints" com diferentes variações
+                const campoAlternativo = issue.customFields.find(field => {
+                    if (!field.name) return false;
+                    const fieldName = field.name.toLowerCase();
+                    const searchName = nomeCampo.toLowerCase();
+                    return fieldName === searchName ||
+                           fieldName.includes(searchName) ||
+                           searchName.includes(fieldName);
+                });
+
+                if (!campoAlternativo) {
+                    return null;
+                }
+                return processarValorCampo(campoAlternativo);
+            }
+
+            return processarValorCampo(campo);
+        }
+
+        // Função auxiliar para processar valor do campo
+        function processarValorCampo(campo) {
+            if (!campo.value) {
+                return null;
+            }
+
+            // Se for array de valores (múltiplas sprints)
+            if (Array.isArray(campo.value)) {
+                return campo.value.length > 0 ? campo.value[0] : null;
+            }
+
+            // Se for objeto com name/id (como no workflow: sprint.name)
+            if (campo.value.name) {
+                return campo.value;
+            }
+
+            // Se for string direta
+            if (typeof campo.value === 'string') {
+                return { name: campo.value, id: campo.value };
+            }
+
+            return campo.value;
+        }
+
+        // Função diagnóstica para verificar estrutura do campo Sprints (baseada no workflow)
+        async function diagnosticarCampoSprints() {
+            try {
+                console.group('🔬 Diagnóstico do Campo Sprints');
+
+                // Buscar primeiro projeto disponível
+                const projects = await host.fetchYouTrack('admin/projects', {
+                    fields: 'id,name,shortName',
+                    '$top': 1
+                });
+
+                if (!projects || projects.length === 0) {
+                    console.log('❌ Nenhum projeto encontrado');
+                    console.groupEnd();
+                    return false;
+                }
+
+                const project = projects[0];
+                console.log('📋 Testando projeto:', project.shortName);
+
+                // Buscar campos customizados do projeto
+                const customFields = await host.fetchYouTrack(`admin/projects/${project.id}/customFields`, {
+                    fields: 'field(name,fieldType),bundle(id,name,values(id,name,archived))'
+                });
+
+                console.log('📊 Campos customizados encontrados:', customFields.length);
+
+                // Procurar campo Sprints especificamente
+                const sprintsField = customFields.find(cf =>
+                    cf.field && cf.field.name === 'Sprints'
+                );
+
+                if (!sprintsField) {
+                    console.log('❌ Campo "Sprints" não encontrado');
+                    console.log('💡 Campos disponíveis:');
+                    customFields.forEach(cf => {
+                        console.log(`  - ${cf.field.name} (${cf.field.fieldType?.valueType || 'tipo desconhecido'})`);
+                    });
+                    console.groupEnd();
+                    return false;
+                }
+
+                console.log('✅ Campo "Sprints" encontrado!');
+                console.log('📝 Detalhes do campo:');
+                console.log('  - Nome:', sprintsField.field.name);
+                console.log('  - Tipo:', sprintsField.field.fieldType?.valueType || 'desconhecido');
+                console.log('  - Bundle ID:', sprintsField.bundle?.id || 'sem bundle');
+                console.log('  - Bundle Nome:', sprintsField.bundle?.name || 'sem nome');
+
+                if (sprintsField.bundle && sprintsField.bundle.values) {
+                    const valores = sprintsField.bundle.values;
+                    const valoresAtivos = valores.filter(v => !v.archived);
+
+                    console.log('📋 Valores do bundle:');
+                    console.log('  - Total:', valores.length);
+                    console.log('  - Ativos:', valoresAtivos.length);
+                    console.log('  - Arquivados:', valores.length - valoresAtivos.length);
+
+                    // Mostrar alguns exemplos
+                    console.log('💡 Exemplos de sprints:');
+                    valoresAtivos.slice(0, 5).forEach((sprint, index) => {
+                        console.log(`  ${index + 1}. "${sprint.name}" (ID: ${sprint.id})`);
+                    });
+
+                    // Verificar padrão de nomes (para detectar sprints atuais)
+                    const sprintsComData = valoresAtivos.filter(s =>
+                        s.name.includes('2025') || s.name.includes('Setembro') || s.name.includes('Agosto')
+                    );
+
+                    if (sprintsComData.length > 0) {
+                        console.log('🗓️ Sprints de 2025 encontradas:', sprintsComData.length);
+                        sprintsComData.forEach(sprint => {
+                            console.log(`  - "${sprint.name}"`);
+                        });
+                    }
+                }
+
+                console.groupEnd();
+                return true;
+
+            } catch (error) {
+                console.error('❌ Erro no diagnóstico:', error);
+                console.groupEnd();
+                return false;
+            }
+        }
 
         // Função para testar conectividade da API
         async function testarAPI() {
@@ -523,7 +782,16 @@
                 const apiDisponivel = await testarAPI();
 
                 if (apiDisponivel) {
-                    console.log('🎯 API disponível, carregando dados reais...');
+                    console.log('🚀 API disponível, executando diagnóstico...');
+
+                    // Executar diagnóstico do campo Sprints
+                    const campoSprintsOK = await diagnosticarCampoSprints();
+
+                    if (campoSprintsOK) {
+                        console.log('✅ Campo Sprints verificado com sucesso');
+                    } else {
+                        console.log('⚠️ Problemas detectados no campo Sprints');
+                    }
 
                     // Carregar sprints primeiro
                     await carregarSprints();
@@ -582,9 +850,9 @@
                 console.log('📅 Período:', new Date(timestampInicio).toLocaleDateString(), 'até', new Date(timestampFim).toLocaleDateString());
                 console.log('🔍 Query YouTrack:', query);
 
-                // Fazer requisição correta para API do YouTrack - incluindo campo Sprints
+                // Fazer requisição correta incluindo campo Sprints
                 const issues = await host.fetchYouTrack('issues', {
-                    fields: 'id,idReadable,summary,state(name),project(name,shortName),created,resolved,customFields(name,value(name))',
+                    fields: 'id,idReadable,summary,state(name),project(name,shortName),created,resolved,customFields(name,value(name,id))',
                     query: query,
                     '$top': 1000
                 });
@@ -653,11 +921,29 @@
             }
         }
 
-        // Calcular métricas com lógica correta
+        // Calcular métricas com lógica correta e campo Sprints
         function calcularMetricas() {
             console.log('🔢 Calculando métricas iMarinho...');
 
             const issues = dashboardData.issues;
+
+            // Log para debug dos campos customizados
+            if (issues.length > 0) {
+                const primeiraIssue = issues[0];
+                console.log('🔍 Campos da primeira issue:', {
+                    id: primeiraIssue.idReadable,
+                    state: primeiraIssue.state?.name,
+                    customFields: primeiraIssue.customFields ?
+                        primeiraIssue.customFields.map(cf => ({
+                            name: cf.name,
+                            hasValue: !!cf.value
+                        })) : 'Nenhum campo customizado'
+                });
+
+                // Verificar se campo Sprints existe
+                const sprintValue = extrairCampoCustomizado(primeiraIssue, 'Sprints');
+                console.log('🏃‍♂️ Valor do campo Sprints na primeira issue:', sprintValue);
+            }
 
             // Filtrar issues válidas (excluir BACKLOG e MOVED TO NEXT SPRINT)
             const issuesValidas = issues.filter(issue => {
@@ -690,13 +976,23 @@
                 issuesValidas.map(issue => issue.project?.name).filter(Boolean)
             ).size;
 
+            // Contar sprints únicos das issues
+            const sprintsNasIssues = new Set();
+            issuesValidas.forEach(issue => {
+                const sprint = extrairCampoCustomizado(issue, 'Sprints');
+                if (sprint && sprint.name) {
+                    sprintsNasIssues.add(sprint.name);
+                }
+            });
+
             dashboardData.metrics = {
                 total,
                 resolvidas,
                 ativas,
                 outras,
                 taxaConclusao,
-                projetos: projetosUnicos
+                projetos: projetosUnicos,
+                sprintsUsados: sprintsNasIssues.size
             };
 
             dashboardData.detalhes = {
@@ -706,10 +1002,12 @@
                 estadosAtivos: ESTADOS_ATIVOS,
                 estadosIgnorados: ESTADOS_IGNORADOS,
                 distribuicaoEstados: calcularDistribuicaoEstados(issuesValidas),
-                teamIssues: calcularIssuesPorTeam(issuesValidas)
+                teamIssues: calcularIssuesPorTeam(issuesValidas),
+                sprintsEncontrados: Array.from(sprintsNasIssues)
             };
 
             console.log('📊 Métricas iMarinho calculadas:', dashboardData.metrics);
+            console.log('🏃‍♂️ Sprints encontrados nas issues:', Array.from(sprintsNasIssues));
         }
 
         // Calcular distribuição por estados
